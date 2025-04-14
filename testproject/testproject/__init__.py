@@ -1,3 +1,0 @@
-"""
-testproject - FastJango project.
-""" 
