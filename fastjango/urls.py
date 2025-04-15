@@ -26,9 +26,12 @@ class Path:
             view: The view function or class
             name: The name of the path
         """
-        self.path = path
+        # Ensure path doesn't start with a slash for consistency
+        self.path = path[1:] if path.startswith('/') else path
         self.view = view
         self.name = name
+        self.methods = ["GET"]  # Default to GET method
+        self.kwargs = {}  # Additional kwargs for add_api_route
 
 
 def path(path: str, view: Callable, name: Optional[str] = None) -> Path:
@@ -90,11 +93,22 @@ def include(module_path: str, namespace: Optional[str] = None) -> Tuple[List[Pat
     # Get the app_name from the module or use the provided namespace
     app_name = namespace or getattr(module, "app_name", None)
     
-    # Extract the path from the module path (last part)
-    path_part = module_path.split(".")[-1]
+    # Extract the path prefix - use the last component of the module path 
+    # that isn't 'urls' (which is a convention, not part of the URL)
+    path_parts = module_path.split(".")
+    path_prefix = ""
     
-    # Return an Include object
-    return urlpatterns, app_name, path_part
+    for part in reversed(path_parts):
+        if part != "urls":
+            path_prefix = part
+            break
+    
+    # Ensure path_prefix doesn't start with a slash
+    if path_prefix.startswith('/'):
+        path_prefix = path_prefix[1:]
+    
+    # Return a tuple with the urlpatterns, app_name and path_prefix
+    return urlpatterns, app_name, path_prefix
 
 
 class URLResolver:
@@ -102,73 +116,73 @@ class URLResolver:
     A URL resolver for FastJango.
     """
     
-    def __init__(self, urlpatterns: List[Path], router: Optional[APIRouter] = None):
+    def __init__(self, router: APIRouter) -> None:
         """
-        Initialize a URL resolver.
+        Initialize the URL resolver.
         
         Args:
-            urlpatterns: The URL patterns to resolve
             router: The FastAPI router to use
         """
-        self.urlpatterns = urlpatterns
-        self.router = router or APIRouter()
-        
-        # Register all URL patterns
-        self._register_patterns(urlpatterns)
-    
-    def _register_patterns(self, patterns: List[Path], prefix: str = "") -> None:
+        self.router = router
+
+    def register(self, urlpatterns: List[Path], prefix: str = "") -> None:
         """
-        Register URL patterns with the router.
+        Register URL patterns with the FastAPI router.
         
         Args:
-            patterns: The URL patterns to register
+            urlpatterns: The URL patterns to register
             prefix: The URL prefix to use
         """
-        for pattern in patterns:
-            if isinstance(pattern, Path):
-                # Add the path to the router
-                self._add_path(pattern, prefix)
-            elif isinstance(pattern, tuple) and len(pattern) >= 2:
-                # Handle included urlpatterns
-                included_patterns, namespace = pattern[0], pattern[1]
+        for path_obj in urlpatterns:
+            if isinstance(path_obj.view, tuple):
+                # This is a result of include()
+                included_patterns, namespace, included_prefix = path_obj.view
                 
-                # Get the path from the tuple if it exists (returned by include())
-                path_prefix = ""
-                if len(pattern) > 2 and pattern[2]:
-                    path_prefix = pattern[2]
+                # Combine the prefixes properly
+                combined_prefix = prefix
+                if path_obj.path:
+                    # Ensure path doesn't start with a slash when adding to prefix
+                    route = path_obj.path
+                    if route.startswith('/'):
+                        route = route[1:]
+                    
+                    # Handle case where prefix is empty
+                    if combined_prefix:
+                        combined_prefix = f"{combined_prefix}/{route}"
+                    else:
+                        combined_prefix = route
                 
-                # Build the new prefix
-                included_prefix = f"{prefix}/{path_prefix}" if prefix else path_prefix
+                # Register included patterns with the combined prefix
+                self.register(included_patterns, prefix=combined_prefix)
+            else:
+                # Convert the path to FastAPI format
+                route_path = self._convert_path(path_obj.path)
                 
-                # Register the included patterns
-                self._register_patterns(included_patterns, included_prefix)
-    
-    def _add_path(self, path: Path, prefix: str = "") -> None:
-        """
-        Add a path to the router.
-        
-        Args:
-            path: The path to add
-            prefix: The URL prefix to use
-        """
-        # Combine prefix and path
-        full_path = prefix
-        if path.path:
-            if full_path and not full_path.endswith('/'):
-                full_path += '/'
-            full_path += path.path
-        
-        # Convert Django-style path to FastAPI path
-        fastapi_path = self._convert_path(full_path)
-        
-        # Register the route with FastAPI
-        self.router.add_api_route(
-            fastapi_path,
-            path.view,
-            methods=["GET"],
-            name=path.name,
-            response_class=HttpResponse,
-        )
+                # Add prefix if present
+                if prefix:
+                    # Format prefix properly
+                    clean_prefix = prefix
+                    if clean_prefix.startswith('/'):
+                        clean_prefix = clean_prefix[1:]
+                    if clean_prefix.endswith('/'):
+                        clean_prefix = clean_prefix[:-1]
+                    
+                    if route_path == "/":
+                        route_path = f"/{clean_prefix}"
+                    else:
+                        route_path = f"/{clean_prefix}{route_path}"
+                
+                # Register the route with the FastAPI router
+                try:
+                    self.router.add_api_route(
+                        route_path,
+                        path_obj.view,
+                        name=path_obj.name,
+                    )
+                except Exception as e:
+                    from fastjango.core.logging import Logger
+                    logger = Logger("fastjango.urls")
+                    logger.error(f"Failed to register route {route_path}: {e}")
     
     def _convert_path(self, path: str) -> str:
         """
@@ -180,6 +194,9 @@ class URLResolver:
         Returns:
             The FastAPI-style path
         """
+        # Normalize multiple slashes to single slashes
+        path = re.sub(r'//+', '/', path)
+        
         # Replace Django-style path parameters with FastAPI-style
         # e.g., /<int:id>/ becomes /{id}/
         path = re.sub(r'<int:(\w+)>', r'{\1}', path)
@@ -193,7 +210,9 @@ class URLResolver:
             path = path[:-1]
         
         # Ensure path starts with a slash for FastAPI
-        if path and not path.startswith('/'):
+        if not path.startswith('/'):
             path = '/' + path
+        elif path == "":
+            path = "/"
         
         return path 

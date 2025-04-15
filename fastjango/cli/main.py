@@ -12,9 +12,11 @@ import typer
 from pathlib import Path
 from rich.console import Console
 from rich.logging import RichHandler
+from typing import Optional
 
 from fastjango.cli.commands import startproject, startapp, runserver
 from fastjango.core.logging import setup_logging
+from fastjango import __version__
 
 # Setup rich console
 console = Console()
@@ -33,14 +35,20 @@ logger = logging.getLogger("fastjango.cli")
 @app.callback()
 def callback(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
+    version: Optional[bool] = typer.Option(None, "--version", help="Show the version and exit"),
 ):
     """
     FastJango command-line utility for administrative tasks.
     """
+    if version:
+        console.print(f"FastJango v{__version__}")
+        raise typer.Exit()
+        
     # Configure logging based on verbosity
     log_level = logging.DEBUG if verbose else logging.INFO
     setup_logging(log_level)
-    logger.debug("Verbose logging enabled")
+    if verbose:
+        logger.debug("Verbose logging enabled")
 
 
 @app.command()

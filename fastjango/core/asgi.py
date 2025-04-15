@@ -7,6 +7,7 @@ import sys
 import importlib
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Optional
+import inspect
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.wsgi import WSGIMiddleware
@@ -16,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
 from fastjango.core.logging import Logger
-from fastjango.urls import Path as UrlPath
+from fastjango.urls import Path as UrlPath, URLResolver
 
 logger = Logger("fastjango.core.asgi")
 
@@ -42,7 +43,61 @@ def get_settings():
         raise ImportError(f"Failed to import settings module: {e}")
 
 
-def get_asgi_application() -> FastAPI:
+def get_asgi_application():
+    """
+    Return an ASGI application that can be used by ASGI servers.
+    
+    This function imports your project's URLs and registers them with a FastAPI app.
+    It also iterates through installed apps and registers their URL patterns.
+    """
+    from fastapi import FastAPI
+    from fastapi.middleware.wsgi import WSGIMiddleware
+    import importlib
+    import logging
+    from django.conf import settings
+    from django.core.handlers.wsgi import WSGIHandler
+    
+    # Create FastAPI app
+    app = FastAPI(title=settings.ROOT_URLCONF.split('.')[0])
+    
+    # Create URL resolver with app router
+    url_resolver = URLResolver(app.router)
+    
+    # Register the project URLs
+    try:
+        urls_module = importlib.import_module(settings.ROOT_URLCONF)
+        if hasattr(urls_module, 'urlpatterns'):
+            url_resolver.register(urls_module.urlpatterns)
+    except (ImportError, AttributeError) as e:
+        logging.warning(f"Could not import project URLs: {e}")
+    
+    # Register URLs from installed apps
+    for app_name in settings.INSTALLED_APPS:
+        try:
+            # Try to import the app's URLs
+            app_urls = importlib.import_module(f"{app_name}.urls")
+            if hasattr(app_urls, 'urlpatterns'):
+                # Get app_name from urls module if it exists
+                namespace = getattr(app_urls, 'app_name', app_name.split('.')[-1])
+                prefix = namespace
+                
+                # Register the app's URL patterns
+                url_resolver.register(app_urls.urlpatterns, prefix=prefix)
+                logging.info(f"Registered URLs for app: {app_name}")
+        except ImportError:
+            # It's normal for an app to not have URLs
+            pass
+        except Exception as e:
+            logging.warning(f"Error including routes for {app_name}: {e}")
+    
+    # Mount Django WSGI app as a sub-application for handling non-API routes
+    django_app = WSGIHandler()
+    app.mount("", WSGIMiddleware(django_app))
+    
+    return app
+
+
+def get_asgi_application_old() -> FastAPI:
     """
     Create and return an ASGI application for FastJango.
     
@@ -148,59 +203,59 @@ def get_asgi_application() -> FastAPI:
                     # Handle direct paths
                     if isinstance(url_pattern, UrlPath):
                         path_value = url_pattern.path
-                        full_path = f"{prefix}/{path_value}" if path_value else prefix or "/"
+                        # Remove any leading slashes from the path
+                        if path_value.startswith('/'):
+                            path_value = path_value.lstrip('/')
+                            
+                        # Build the full path, ensuring no double slashes
+                        if prefix:
+                            full_path = f"{prefix}/{path_value}".replace('//', '/')
+                        else:
+                            full_path = f"/{path_value}" if path_value else "/"
+                        
+                        # Ensure the path starts with a slash
                         if not full_path.startswith('/'):
                             full_path = f"/{full_path}"
                         
+                        # Verify that view is callable before registering
+                        view_func = url_pattern.view
+                        if not callable(view_func):
+                            logger.warning(f"View for path {full_path} is not callable: {view_func}")
+                            continue
+                        
                         # Register the route with FastAPI
                         app.add_api_route(
-                            full_path, 
-                            url_pattern.view,
+                            full_path,
+                            view_func,
                             methods=["GET"],
-                            name=getattr(url_pattern, "name", None)
+                            name=url_pattern.name,
                         )
-                        logger.info(f"Registered URL pattern for {full_path}")
                         
-                        # Check if this is the root route
-                        if full_path == "/":
+                        if full_path == "/" and not root_route_registered:
                             root_route_registered = True
                     
-                    # Handle included paths
-                    elif isinstance(url_pattern, tuple) and len(url_pattern) == 2:
-                        # Here url_pattern is a tuple of (included_patterns, namespace)
-                        included_patterns, namespace = url_pattern
+                    # Handle included patterns from include()
+                    elif isinstance(url_pattern, tuple) and len(url_pattern) >= 2:
+                        # url_pattern format is (patterns, namespace, module_path)
+                        included_patterns = url_pattern[0]
                         
-                        # If we have a third element which is the include path
-                        # This is a special case for our include() function
-                        included_path = ""
-                        if len(url_pattern) > 2 and isinstance(url_pattern[2], str):
-                            included_path = url_pattern[2]  # This should be the path from include
-                        elif hasattr(url_pattern, "path"):
-                            included_path = url_pattern.path  # Fallback for Path instances with include
+                        # Get the path prefix from the tuple's third element
+                        path_prefix = ""
+                        if len(url_pattern) > 2 and url_pattern[2]:
+                            path_prefix = url_pattern[2]
                         
+                        # Build the new prefix
                         new_prefix = prefix
-                        if included_path:
-                            new_prefix = f"{prefix}/{included_path}" if prefix else f"/{included_path}"
+                        if path_prefix:
+                            new_prefix = f"{prefix}/{path_prefix}" if prefix else f"{path_prefix}"
+                            
+                        # Ensure no double slashes
+                        new_prefix = new_prefix.replace('//', '/')
                         
-                        # If it's an API include, try to handle it specially
-                        if "api" in included_path:
-                            try:
-                                api_module_path = f"{project_name}.api.urls"
-                                if '.' in included_path:
-                                    api_module_path = included_path
-                                
-                                api_module = importlib.import_module(api_module_path)
-                                
-                                if hasattr(api_module, "urlpatterns"):
-                                    # Recursively register API patterns
-                                    register_urls(api_module.urlpatterns, new_prefix)
-                            except ImportError:
-                                logger.warning(f"Could not import API module: {api_module_path}")
-                            except Exception as e:
-                                logger.warning(f"Error registering API routes: {e}")
-                        else:
-                            # Recursively register the included patterns
-                            register_urls(included_patterns, new_prefix)
+                        # Recursively register the included patterns
+                        register_urls(included_patterns, new_prefix)
+                    else:
+                        logger.warning(f"Unsupported URL pattern type: {type(url_pattern)}")
             
             # Start registering URLs from the root urlpatterns
             register_urls(urls_module.urlpatterns)

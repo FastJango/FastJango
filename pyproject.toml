@@ -55,7 +55,7 @@ docs = [
 ]
 
 [project.urls]
-Documentation = "https://fastjango.readthedocs.io/"
+Documentation = "https://github.com/fastjango/fastjango"
 Source = "https://github.com/fastjango/fastjango"
 Tracker = "https://github.com/fastjango/fastjango/issues"
 
@@ -76,3 +76,16 @@ include = '\.pyi?$'
 [tool.isort]
 profile = "black"
 line_length = 88 
+
+[tool.setuptools]
+packages = ["fastjango"]
+
+[tool.twine]
+username = "__token__"
+password = "${PYPI_API_TOKEN}"
+repository = "https://upload.pypi.org/legacy/"
+
+[tool.testpypi]
+username = "__token__"
+password = "${TEST_PYPI_API_TOKEN}"
+repository = "https://test.pypi.org/legacy/"
