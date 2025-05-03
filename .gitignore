@@ -156,3 +156,6 @@ cython_debug/
 _test_fastjango/
 testproject/
 .DS_Store
+
+
+.pypirc

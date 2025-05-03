@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fastjango"
-version = "0.1.0"
-description = "A web framework inspired by Django using FastAPI as core"
+version = "0.1.1"
+description = "A fastweb framework inspired by Django using FastAPI as core"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {file = "LICENSE"}
 authors = [
-    {name = "FastJango Team", email = "info@fastjango.example.com"}
+    {name = "Bhavik Shah - FastJango Team", email = "bhavik1st@gmail.com"}
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",

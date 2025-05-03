@@ -66,7 +66,7 @@ def create_context(app_name: str) -> Dict[str, Any]:
         "app_name": app_name,
         "app_name_snake": app_name.replace("-", "_").lower(),
         "app_name_camel": "".join(word.capitalize() for word in app_name.replace("-", "_").split("_")),
-        "fastjango_version": "0.1.0"
+        "fastjango_version": "0.1.1"
     }
 
 

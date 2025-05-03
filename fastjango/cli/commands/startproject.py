@@ -65,7 +65,7 @@ def create_context(project_name: str) -> Dict[str, Any]:
     return {
         "project_name": project_name,
         "project_name_snake": project_name.replace("-", "_").lower(),
-        "fastjango_version": "0.1.0"
+        "fastjango_version": "0.1.1"
     }
 
 
@@ -341,7 +341,7 @@ if __name__ == "__main__":
     os.chmod(project_dir / "manage.py", 0o755)  # Make executable
     
     # Create requirements.txt
-    requirements_content = "fastjango>=0.1.0,<0.2.0\n"
+    requirements_content = "fastjango>=0.1.1,<0.2.0\n"
     (project_dir / "requirements.txt").write_text(requirements_content)
 
 

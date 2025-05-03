@@ -1,7 +1,7 @@
 # FastJango
 
-FastJango is a web framework inspired by Django that uses FastAPI as its core. 
-It provides a familiar Django-like experience with the performance and modern features of FastAPI.
+FastJango is a fast web framework inspired by Django built on FastAPI. 
+It provides a familiar Django-like experience with the performance and modern features of FastAPI. FastJango prefers convention over configuration and simplifies development of API First Web Services.
 
 ## Features
 
