@@ -167,23 +167,68 @@ def run_migrate(args: List[str]) -> None:
     Args:
         args: Command line arguments
     """
-    # This is a placeholder for actual migration logic
-    # In a real implementation, you would use SQLAlchemy/Alembic
-    logger.info("Applying database migrations...")
-    logger.info("Migrations applied successfully")
+    from fastjango.cli.commands.migrate import migrate
+    
+    # Parse arguments
+    app_label = None
+    fake = False
+    show = False
+    rollback = None
+    
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--fake":
+            fake = True
+        elif arg == "--show":
+            show = True
+        elif arg == "--rollback":
+            if i + 1 < len(args):
+                rollback = args[i + 1]
+                i += 1
+        elif not arg.startswith("--"):
+            app_label = arg
+        i += 1
+    
+    # Run migration
+    applied_count = migrate(app_label=app_label, fake=fake, show_status=show, rollback=rollback)
+    print(f"Applied {applied_count} migrations")
 
 
 def make_migrations(args: List[str]) -> None:
     """
-    Create new database migrations.
+    Create database migration files.
     
     Args:
         args: Command line arguments
     """
-    # This is a placeholder for actual migration creation logic
-    # In a real implementation, you would use SQLAlchemy/Alembic
-    logger.info("Creating database migrations...")
-    logger.info("Migrations created successfully")
+    from fastjango.cli.commands.makemigrations import make_migrations
+    
+    # Parse arguments
+    app_label = None
+    migration_name = None
+    
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--name" or arg == "-n":
+            if i + 1 < len(args):
+                migration_name = args[i + 1]
+                i += 1
+        elif not arg.startswith("--"):
+            app_label = arg
+        i += 1
+    
+    if not app_label:
+        print("Error: App label is required")
+        return
+    
+    # Create migration
+    migration_file = make_migrations(app_label, migration_name)
+    if migration_file:
+        print(f"Created migration: {migration_file}")
+    else:
+        print("No changes detected")
 
 
 def run_custom_command(command: str, args: List[str]) -> None:

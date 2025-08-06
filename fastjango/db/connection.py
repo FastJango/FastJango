@@ -28,18 +28,25 @@ def get_database_config() -> Dict[str, Any]:
         Database configuration dictionary
     """
     try:
-        from django.conf import settings
-        return settings.DATABASES.get('default', {})
+        # Try to import FastJango settings
+        import os
+        settings_module = os.environ.get('FASTJANGO_SETTINGS_MODULE')
+        if settings_module:
+            settings = importlib.import_module(settings_module)
+            return getattr(settings, 'DATABASES', {}).get('default', {})
     except ImportError:
-        # Fallback for when Django settings are not available
-        return {
-            'ENGINE': 'sqlite',
-            'NAME': 'db.sqlite3',
-            'USER': '',
-            'PASSWORD': '',
-            'HOST': '',
-            'PORT': '',
-        }
+        pass
+    
+    # Fallback configuration
+    return {
+        'ENGINE': 'sqlite',
+        'NAME': 'db.sqlite3',
+        'USER': '',
+        'PASSWORD': '',
+        'HOST': '',
+        'PORT': '',
+        'OPTIONS': {},
+    }
 
 
 def get_engine() -> Engine:
@@ -56,12 +63,18 @@ def get_engine() -> Engine:
         
         # Parse engine type
         engine_type = config.get('ENGINE', 'sqlite')
+        options = config.get('OPTIONS', {})
+        
         if 'sqlite' in engine_type:
             database_url = f"sqlite:///{config.get('NAME', 'db.sqlite3')}"
+            connect_args = {"check_same_thread": False}
+            connect_args.update(options.get('connect_args', {}))
+            
             _engine = create_engine(
                 database_url,
-                connect_args={"check_same_thread": False},
-                poolclass=StaticPool
+                connect_args=connect_args,
+                poolclass=StaticPool,
+                **options.get('engine_options', {})
             )
         elif 'postgresql' in engine_type or 'postgres' in engine_type:
             user = config.get('USER', '')
@@ -75,7 +88,7 @@ def get_engine() -> Engine:
             else:
                 database_url = f"postgresql://{host}:{port}/{name}"
             
-            _engine = create_engine(database_url)
+            _engine = create_engine(database_url, **options.get('engine_options', {}))
         elif 'mysql' in engine_type:
             user = config.get('USER', '')
             password = config.get('PASSWORD', '')
@@ -88,7 +101,7 @@ def get_engine() -> Engine:
             else:
                 database_url = f"mysql+pymysql://{host}:{port}/{name}"
             
-            _engine = create_engine(database_url)
+            _engine = create_engine(database_url, **options.get('engine_options', {}))
         else:
             raise ValueError(f"Unsupported database engine: {engine_type}")
         
