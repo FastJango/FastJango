@@ -211,30 +211,151 @@ This document provides a comprehensive comparison between Django features and Fa
 
 ## Planned Features
 
+### Critical Priority (Must-Have)
+1. **Database & ORM**: Complete ORM system with SQLAlchemy
+2. **Migrations**: `makemigrations` and `migrate` commands
+3. **Form System**: Django-like form handling with validation
+4. **Authentication**: Complete auth system with user model
+5. **Model Fields**: All essential Django model fields
+
 ### High Priority
-1. **Database Models**: Implement `fastjango.db.models` with SQLAlchemy
-2. **Migrations**: Database migration system (`makemigrations`, `migrate`)
-3. **Form System**: Django-like form handling
-4. **Admin Interface**: Basic admin interface
-5. **Session Support**: Session middleware and storage
-6. **Shell Command**: Interactive Python shell
-7. **Check Command**: Project validation
+1. **Testing Framework**: Complete test framework with client
+2. **Static Files**: Static file serving and collection (`collectstatic`)
+3. **Management Commands**: Custom command framework
+4. **Shell Command**: Interactive Python shell
+5. **Check Command**: Project validation
 
 ### Medium Priority
-1. **Static Files**: Static file serving and collection (`collectstatic`)
-2. **Media Files**: File upload handling
-3. **Testing Framework**: Django-like test framework (`test`)
-4. **Management Commands**: Custom command framework
-5. **Caching**: Basic caching system
-6. **Admin Commands**: `createsuperuser`, `dumpdata`, `loaddata`
+1. **Admin Interface**: Basic admin interface with model registration
+2. **Session System**: Session middleware and storage
+3. **Caching**: Basic caching system with Redis/Memcached
+4. **Internationalization**: i18n support (`makemessages`, `compilemessages`)
+5. **Media Files**: File upload handling
 
 ### Low Priority
-1. **Internationalization**: i18n support (`makemessages`, `compilemessages`)
-2. **Signals**: Signal system
-3. **Advanced Middleware**: Security, GZip, etc.
-4. **Advanced Admin**: Customizable admin interface
-5. **Utility Commands**: `inspectdb`, `diffsettings`, `sendtestemail`
-6. **Advanced Database Commands**: `sqlmigrate`, `showmigrations`, `dbshell`
+1. **Signals System**: Model and request signals
+2. **Advanced Middleware**: Security, GZip, message middleware
+3. **Advanced Admin**: Customizable admin interface
+4. **Utility Commands**: `inspectdb`, `diffsettings`, `sendtestemail`
+5. **Advanced Database Commands**: `sqlmigrate`, `showmigrations`, `dbshell`
+6. **Advanced Features**: Advanced caching, advanced i18n
+
+## Must-Have Django Features for FastJango (Priority Order)
+
+### 🚨 Critical Priority (Essential for Production)
+
+#### 1. Database & ORM System
+- **Database Models**: Core ORM with SQLAlchemy integration
+- **Migrations**: `makemigrations` and `migrate` commands
+- **Model Fields**: CharField, TextField, DateTimeField, ForeignKey, etc.
+- **QuerySet API**: Django-like query operations
+- **Database Backends**: SQLite, PostgreSQL, MySQL support
+- **Model Validation**: Field and model-level validation
+- **Database Transactions**: ACID transaction support
+
+**Why Critical**: Without a proper ORM, FastJango cannot be a serious Django alternative. Database operations are fundamental to web applications.
+
+#### 2. Form System
+- **Form Classes**: Django-like form definitions
+- **Form Validation**: Field and form-level validation
+- **Form Rendering**: Template form rendering
+- **CSRF Protection**: Cross-site request forgery protection
+- **File Uploads**: Form file upload handling
+
+**Why Critical**: Forms are essential for user input handling and data validation in web applications.
+
+#### 3. Authentication System
+- **User Model**: Customizable user model
+- **Authentication Backends**: Multiple auth backends
+- **Permissions**: User permissions and groups
+- **Session Management**: Session storage and handling
+- **Password Management**: Password hashing and validation
+
+**Why Critical**: Authentication is fundamental for most web applications and security.
+
+### 🔥 High Priority (Needed for Most Projects)
+
+#### 4. Testing Framework
+- **Test Client**: HTTP test client for views
+- **Test Database**: Isolated test database
+- **Test Fixtures**: Test data management
+- **Test Commands**: `test` command with coverage
+- **Test Utilities**: Assertion helpers
+
+**Why High Priority**: Testing is essential for reliable applications and CI/CD pipelines.
+
+#### 5. Static Files System
+- **Static File Serving**: Development and production serving
+- **Static File Collection**: `collectstatic` command
+- **Static File Storage**: Configurable storage backends
+- **Static File Processing**: CSS/JS minification, etc.
+
+**Why High Priority**: Static files are needed for CSS, JavaScript, images in web applications.
+
+#### 6. Management Commands Framework
+- **Custom Commands**: User-defined management commands
+- **Command Discovery**: Automatic command discovery
+- **Command Registration**: Command registration system
+- **Shell Command**: Interactive Python shell
+
+**Why High Priority**: Management commands are essential for database operations, maintenance, and custom project tasks.
+
+### 📈 Medium Priority (Important for Many Projects)
+
+#### 7. Admin Interface
+- **Model Registration**: Admin model registration
+- **Admin Customization**: Custom admin views and forms
+- **Admin Commands**: `createsuperuser`, `dumpdata`, `loaddata`
+- **Admin Permissions**: Admin-specific permissions
+
+**Why Medium Priority**: Admin interface is very useful for data management but not essential for all projects.
+
+#### 8. Session System
+- **Session Middleware**: Session handling middleware
+- **Session Storage**: Database, cache, file session storage
+- **Session Configuration**: Session settings and security
+- **Session Security**: Session hijacking protection
+
+**Why Medium Priority**: Sessions are important for user state but can be replaced with JWT tokens for APIs.
+
+#### 9. Caching System
+- **Cache Framework**: Caching decorators and utilities
+- **Cache Backends**: Redis, Memcached, database caching
+- **Cache Configuration**: Cache settings and invalidation
+
+**Why Medium Priority**: Caching improves performance but can be implemented with external services.
+
+#### 10. Internationalization (i18n)
+- **Translation System**: Gettext integration
+- **Locale Middleware**: Locale detection
+- **Translation Commands**: `makemessages`, `compilemessages`
+- **Template Translation**: Template translation tags
+
+**Why Medium Priority**: Important for international applications but not essential for all projects.
+
+### 🔧 Low Priority (Nice to Have)
+
+#### 11. Signals System
+- **Model Signals**: pre_save, post_save, etc.
+- **Request Signals**: request_started, request_finished
+- **Custom Signals**: User-defined signals
+
+**Why Low Priority**: Signals are useful for decoupling but not essential for core functionality.
+
+#### 12. Advanced Middleware
+- **Security Middleware**: Security headers
+- **GZip Middleware**: Response compression
+- **Message Middleware**: User message framework
+- **Common Middleware**: Common HTTP middleware
+
+**Why Low Priority**: These can be handled by external services or are not essential for all projects.
+
+#### 13. Advanced Database Features
+- **Database Introspection**: `inspectdb` command
+- **Database Validation**: `validate` command
+- **Migration Utilities**: `sqlmigrate`, `showmigrations`
+
+**Why Low Priority**: Useful for development but not essential for production applications.
 
 ## Migration Path from Django
 
