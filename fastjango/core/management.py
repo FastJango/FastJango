@@ -120,44 +120,34 @@ def start_app(args: List[str]) -> None:
     create_app(app_name, target_dir)
 
 
-def run_shell() -> None:
+def run_shell(args: List[str] = None) -> None:
     """Run a Python shell with the FastJango environment."""
+    if args is None:
+        args = []
+    
     try:
-        # Try to use IPython if available
-        import IPython
-        from traitlets.config import Config
+        from fastjango.cli.commands.shell import shell_command
         
-        # Configure IPython
-        c = Config()
-        c.InteractiveShellApp.exec_lines = [
-            "import os",
-            "import sys",
-            "import importlib",
-            "from pathlib import Path",
-            "from fastjango.core.management import execute_from_command_line",
-            "print('FastJango shell. Type \"help\" for more information.')",
-        ]
+        # Parse arguments
+        plain = False
+        command = None
         
-        # Start IPython
-        IPython.start_ipython(argv=[], config=c)
-    except ImportError:
-        # Fall back to standard Python shell
-        import code
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg == "--plain":
+                plain = True
+            elif arg == "--command" or arg == "-c":
+                if i + 1 < len(args):
+                    command = args[i + 1]
+                    i += 1
+            i += 1
         
-        # Create local variables
-        locals_dict = {
-            "os": os,
-            "sys": sys,
-            "importlib": importlib,
-            "Path": __import__("pathlib").Path,
-            "execute_from_command_line": execute_from_command_line,
-        }
-        
-        # Print banner
-        print("FastJango shell. Type \"help\" for more information.")
-        
-        # Start interactive console
-        code.interact(local=locals_dict)
+        # Run shell
+        shell_command(plain=plain, command=command)
+    except Exception as e:
+        logger.error(f"Error running shell: {e}")
+        sys.exit(1)
 
 
 def run_migrate(args: List[str]) -> None:
@@ -229,6 +219,9 @@ def make_migrations(args: List[str]) -> None:
         print(f"Created migration: {migration_file}")
     else:
         print("No changes detected")
+
+
+
 
 
 def run_custom_command(command: str, args: List[str]) -> None:

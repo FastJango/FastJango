@@ -14,7 +14,7 @@ from rich.console import Console
 from rich.logging import RichHandler
 from typing import Optional
 
-from fastjango.cli.commands import startproject, startapp, runserver, makemigrations, migrate
+from fastjango.cli.commands import startproject, startapp, runserver, makemigrations, migrate, shell
 from fastjango.core.logging import setup_logging
 from fastjango import __version__
 
@@ -169,6 +169,25 @@ def migrate(
             logger.info(f"Applied {applied_count} migrations")
     except Exception as e:
         logger.error(f"Failed to apply migrations: {str(e)}")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def shell(
+    plain: bool = typer.Option(False, "--plain", help="Run a plain Python shell"),
+    command: str = typer.Option(None, "--command", "-c", help="Execute a command and exit"),
+):
+    """
+    Start an interactive Python shell with FastJango environment.
+    """
+    try:
+        from fastjango.cli.commands.shell import shell_command
+        
+        logger.info("Starting FastJango interactive shell")
+        
+        shell_command(plain=plain, command=command)
+    except Exception as e:
+        logger.error(f"Failed to start shell: {str(e)}")
         raise typer.Exit(code=1)
 
 

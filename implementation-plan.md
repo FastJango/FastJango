@@ -57,6 +57,7 @@ This document provides a comprehensive comparison between Django features and Fa
 - **startproject**: Create new FastJango projects
 - **startapp**: Create new apps within projects
 - **runserver**: Run development server
+- **shell**: Interactive Python shell with FastJango environment
 - **manage.py**: Project-specific management script
 
 ### ❌ Not Yet Implemented in FastJango
@@ -98,6 +99,18 @@ This document provides a comprehensive comparison between Django features and Fa
 #### Caching
 - **Cache Framework**: Caching system
 - **Cache Backends**: Redis, Memcached, database caching
+
+#### REST API (DRF-like)
+- **Serializers**: Pydantic-based serialization with DRF-like API ✅
+- **ModelSerializers**: Automatic model field serialization ✅
+- **ViewSets**: ModelViewSet, ReadOnlyModelViewSet with FastAPI integration ✅
+- **Permissions**: BasePermission, IsAuthenticated, IsAuthenticatedOrReadOnly ✅
+- **Authentication**: Session, Token, Basic, OAuth2, JWT authentication classes ✅
+- **Pagination**: PageNumber, LimitOffset, Cursor pagination ✅
+- **Filters**: Search and ordering filters ✅
+- **Throttling**: Rate limiting support ✅
+- **API Exceptions**: Custom API exception handling ✅
+- **Routers**: DefaultRouter, SimpleRouter for ViewSet routing ✅
 - **Cache Decorators**: Cache decorators for views
 
 #### Internationalization
