@@ -52,6 +52,13 @@ This document provides a comprehensive comparison between Django features and Fa
 - **Logger Integration**: Custom Logger class
 - **Structured Logging**: Support for structured log messages
 
+#### Command Line Interface
+- **fastjango-admin**: Main CLI utility
+- **startproject**: Create new FastJango projects
+- **startapp**: Create new apps within projects
+- **runserver**: Run development server
+- **manage.py**: Project-specific management script
+
 ### ❌ Not Yet Implemented in FastJango
 
 #### Database & ORM
@@ -106,9 +113,10 @@ This document provides a comprehensive comparison between Django features and Fa
 - **Test Fixtures**: Test data fixtures
 
 #### Management Commands
-- **Custom Commands**: Custom management commands
-- **Command Framework**: Command creation framework
-- **Shell Command**: Interactive shell
+- **Custom Commands**: Custom management commands (framework exists but not implemented)
+- **Command Framework**: Command creation framework (basic structure exists)
+- **Shell Command**: Interactive shell (placeholder exists)
+- **Database Commands**: migrate, makemigrations (placeholders exist)
 
 #### Signals
 - **Signal System**: Django-like signal system
@@ -144,27 +152,89 @@ This document provides a comprehensive comparison between Django features and Fa
 - **Interactive API Docs**: Swagger UI and ReDoc
 - **Type Safety**: Full type checking support
 
+## Django Command Line Commands Comparison
+
+### ✅ Implemented in FastJango
+
+#### Core Commands
+- **fastjango-admin startproject**: Create new FastJango projects
+- **fastjango-admin startapp**: Create new apps within projects
+- **fastjango-admin runserver**: Run development server
+- **python manage.py runserver**: Project-specific server runner
+- **python manage.py startapp**: Project-specific app creation
+
+#### Basic Management Framework
+- **Command Framework**: Basic command execution system
+- **Help System**: Built-in help for available commands
+- **Error Handling**: Command error handling and logging
+
+### ❌ Not Yet Implemented in FastJango
+
+#### Database Commands
+- **makemigrations**: Create database migration files
+- **migrate**: Apply database migrations
+- **sqlmigrate**: Show SQL for a migration
+- **showmigrations**: Show migration status
+- **dbshell**: Open database shell
+
+#### Development Commands
+- **shell**: Interactive Python shell
+- **check**: Check for problems in project
+- **compilemessages**: Compile .po files to .mo
+- **makemessages**: Create .po files for translations
+- **collectstatic**: Collect static files
+- **findstatic**: Find static files
+
+#### Admin Commands
+- **createsuperuser**: Create admin superuser
+- **changepassword**: Change user password
+- **dumpdata**: Output data as JSON
+- **loaddata**: Load data from fixtures
+- **flush**: Remove all data from database
+
+#### Testing Commands
+- **test**: Run test suite
+- **testserver**: Run server with test data
+- **coverage**: Run tests with coverage
+
+#### Utility Commands
+- **inspectdb**: Introspect database tables
+- **diffsettings**: Show differences between settings
+- **sendtestemail**: Send test email
+- **validate**: Validate models
+- **squashmigrations**: Squash migrations
+
+#### Custom Commands
+- **Custom management commands**: User-defined commands
+- **Command discovery**: Automatic command discovery
+- **Command registration**: Command registration system
+
 ## Planned Features
 
 ### High Priority
 1. **Database Models**: Implement `fastjango.db.models` with SQLAlchemy
-2. **Migrations**: Database migration system
+2. **Migrations**: Database migration system (`makemigrations`, `migrate`)
 3. **Form System**: Django-like form handling
 4. **Admin Interface**: Basic admin interface
 5. **Session Support**: Session middleware and storage
+6. **Shell Command**: Interactive Python shell
+7. **Check Command**: Project validation
 
 ### Medium Priority
-1. **Static Files**: Static file serving and collection
+1. **Static Files**: Static file serving and collection (`collectstatic`)
 2. **Media Files**: File upload handling
-3. **Testing Framework**: Django-like test framework
+3. **Testing Framework**: Django-like test framework (`test`)
 4. **Management Commands**: Custom command framework
 5. **Caching**: Basic caching system
+6. **Admin Commands**: `createsuperuser`, `dumpdata`, `loaddata`
 
 ### Low Priority
-1. **Internationalization**: i18n support
+1. **Internationalization**: i18n support (`makemessages`, `compilemessages`)
 2. **Signals**: Signal system
 3. **Advanced Middleware**: Security, GZip, etc.
 4. **Advanced Admin**: Customizable admin interface
+5. **Utility Commands**: `inspectdb`, `diffsettings`, `sendtestemail`
+6. **Advanced Database Commands**: `sqlmigrate`, `showmigrations`, `dbshell`
 
 ## Migration Path from Django
 
