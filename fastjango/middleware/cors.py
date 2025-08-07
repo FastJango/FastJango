@@ -13,6 +13,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from fastjango.core.exceptions import FastJangoError
+from fastjango.core.settings import get_settings_instance, get_cors_settings
 
 
 class CORSMiddleware(BaseHTTPMiddleware):
@@ -52,16 +53,20 @@ class CORSMiddleware(BaseHTTPMiddleware):
         """
         super().__init__(app)
         
-        self.allowed_origins = allowed_origins or []
-        self.allowed_origin_regexes = allowed_origin_regexes or []
-        self.allowed_methods = allowed_methods or ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-        self.allowed_headers = allowed_headers or []
-        self.exposed_headers = exposed_headers or []
-        self.allow_credentials = allow_credentials
-        self.max_age = max_age
-        self.allow_all_origins = allow_all_origins
-        self.allow_all_methods = allow_all_methods
-        self.allow_all_headers = allow_all_headers
+        # Get settings if not provided
+        settings = get_settings_instance()
+        cors_settings = get_cors_settings(settings)
+        
+        self.allowed_origins = allowed_origins or cors_settings['allowed_origins']
+        self.allowed_origin_regexes = allowed_origin_regexes or cors_settings['allowed_origin_regexes']
+        self.allowed_methods = allowed_methods or cors_settings['allowed_methods']
+        self.allowed_headers = allowed_headers or cors_settings['allowed_headers']
+        self.exposed_headers = exposed_headers or cors_settings['exposed_headers']
+        self.allow_credentials = allow_credentials or cors_settings['allow_credentials']
+        self.max_age = max_age or cors_settings['max_age']
+        self.allow_all_origins = allow_all_origins or cors_settings['allow_all_origins']
+        self.allow_all_methods = allow_all_methods or cors_settings['allow_all_methods']
+        self.allow_all_headers = allow_all_headers or cors_settings['allow_all_headers']
     
     def _is_origin_allowed(self, origin: str) -> bool:
         """Check if origin is allowed."""
@@ -197,26 +202,42 @@ class CORSMiddleware(BaseHTTPMiddleware):
         return response
 
 
-def setup_cors_middleware(app, settings: Dict[str, Any]):
+def setup_cors_middleware(app, **kwargs):
     """
     Set up CORS middleware using Django-like settings.
     
     Args:
         app: The FastAPI application
-        settings: Settings dictionary
+        **kwargs: CORS settings to override defaults
     """
+    # Get settings
+    settings = get_settings_instance()
+    cors_settings = get_cors_settings(settings)
+    
+    # Override with kwargs if provided
+    allowed_origins = kwargs.get('allowed_origins', cors_settings['allowed_origins'])
+    allowed_origin_regexes = kwargs.get('allowed_origin_regexes', cors_settings['allowed_origin_regexes'])
+    allowed_methods = kwargs.get('allowed_methods', cors_settings['allowed_methods'])
+    allowed_headers = kwargs.get('allowed_headers', cors_settings['allowed_headers'])
+    exposed_headers = kwargs.get('exposed_headers', cors_settings['exposed_headers'])
+    allow_credentials = kwargs.get('allow_credentials', cors_settings['allow_credentials'])
+    max_age = kwargs.get('max_age', cors_settings['max_age'])
+    allow_all_origins = kwargs.get('allow_all_origins', cors_settings['allow_all_origins'])
+    allow_all_methods = kwargs.get('allow_all_methods', cors_settings['allow_all_methods'])
+    allow_all_headers = kwargs.get('allow_all_headers', cors_settings['allow_all_headers'])
+    
     cors_middleware = CORSMiddleware(
         app,
-        allowed_origins=settings.get("CORS_ALLOWED_ORIGINS", []),
-        allowed_origin_regexes=settings.get("CORS_ALLOWED_ORIGIN_REGEXES", []),
-        allowed_methods=settings.get("CORS_ALLOWED_METHODS", ["GET", "POST", "PUT", "DELETE", "OPTIONS"]),
-        allowed_headers=settings.get("CORS_ALLOWED_HEADERS", []),
-        exposed_headers=settings.get("CORS_EXPOSED_HEADERS", []),
-        allow_credentials=settings.get("CORS_ALLOW_CREDENTIALS", False),
-        max_age=settings.get("CORS_MAX_AGE"),
-        allow_all_origins=settings.get("CORS_ALLOW_ALL_ORIGINS", False),
-        allow_all_methods=settings.get("CORS_ALLOW_ALL_METHODS", False),
-        allow_all_headers=settings.get("CORS_ALLOW_ALL_HEADERS", False)
+        allowed_origins=allowed_origins,
+        allowed_origin_regexes=allowed_origin_regexes,
+        allowed_methods=allowed_methods,
+        allowed_headers=allowed_headers,
+        exposed_headers=exposed_headers,
+        allow_credentials=allow_credentials,
+        max_age=max_age,
+        allow_all_origins=allow_all_origins,
+        allow_all_methods=allow_all_methods,
+        allow_all_headers=allow_all_headers
     )
     
     app.add_middleware(CORSMiddleware, **cors_middleware.__dict__)
