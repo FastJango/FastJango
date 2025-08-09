@@ -120,44 +120,34 @@ def start_app(args: List[str]) -> None:
     create_app(app_name, target_dir)
 
 
-def run_shell() -> None:
+def run_shell(args: List[str] = None) -> None:
     """Run a Python shell with the FastJango environment."""
+    if args is None:
+        args = []
+    
     try:
-        # Try to use IPython if available
-        import IPython
-        from traitlets.config import Config
+        from fastjango.cli.commands.shell import shell_command
         
-        # Configure IPython
-        c = Config()
-        c.InteractiveShellApp.exec_lines = [
-            "import os",
-            "import sys",
-            "import importlib",
-            "from pathlib import Path",
-            "from fastjango.core.management import execute_from_command_line",
-            "print('FastJango shell. Type \"help\" for more information.')",
-        ]
+        # Parse arguments
+        plain = False
+        command = None
         
-        # Start IPython
-        IPython.start_ipython(argv=[], config=c)
-    except ImportError:
-        # Fall back to standard Python shell
-        import code
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg == "--plain":
+                plain = True
+            elif arg == "--command" or arg == "-c":
+                if i + 1 < len(args):
+                    command = args[i + 1]
+                    i += 1
+            i += 1
         
-        # Create local variables
-        locals_dict = {
-            "os": os,
-            "sys": sys,
-            "importlib": importlib,
-            "Path": __import__("pathlib").Path,
-            "execute_from_command_line": execute_from_command_line,
-        }
-        
-        # Print banner
-        print("FastJango shell. Type \"help\" for more information.")
-        
-        # Start interactive console
-        code.interact(local=locals_dict)
+        # Run shell
+        shell_command(plain=plain, command=command)
+    except Exception as e:
+        logger.error(f"Error running shell: {e}")
+        sys.exit(1)
 
 
 def run_migrate(args: List[str]) -> None:
@@ -167,23 +157,71 @@ def run_migrate(args: List[str]) -> None:
     Args:
         args: Command line arguments
     """
-    # This is a placeholder for actual migration logic
-    # In a real implementation, you would use SQLAlchemy/Alembic
-    logger.info("Applying database migrations...")
-    logger.info("Migrations applied successfully")
+    from fastjango.cli.commands.migrate import migrate
+    
+    # Parse arguments
+    app_label = None
+    fake = False
+    show = False
+    rollback = None
+    
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--fake":
+            fake = True
+        elif arg == "--show":
+            show = True
+        elif arg == "--rollback":
+            if i + 1 < len(args):
+                rollback = args[i + 1]
+                i += 1
+        elif not arg.startswith("--"):
+            app_label = arg
+        i += 1
+    
+    # Run migration
+    applied_count = migrate(app_label=app_label, fake=fake, show_status=show, rollback=rollback)
+    print(f"Applied {applied_count} migrations")
 
 
 def make_migrations(args: List[str]) -> None:
     """
-    Create new database migrations.
+    Create database migration files.
     
     Args:
         args: Command line arguments
     """
-    # This is a placeholder for actual migration creation logic
-    # In a real implementation, you would use SQLAlchemy/Alembic
-    logger.info("Creating database migrations...")
-    logger.info("Migrations created successfully")
+    from fastjango.cli.commands.makemigrations import make_migrations
+    
+    # Parse arguments
+    app_label = None
+    migration_name = None
+    
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--name" or arg == "-n":
+            if i + 1 < len(args):
+                migration_name = args[i + 1]
+                i += 1
+        elif not arg.startswith("--"):
+            app_label = arg
+        i += 1
+    
+    if not app_label:
+        print("Error: App label is required")
+        return
+    
+    # Create migration
+    migration_file = make_migrations(app_label, migration_name)
+    if migration_file:
+        print(f"Created migration: {migration_file}")
+    else:
+        print("No changes detected")
+
+
+
 
 
 def run_custom_command(command: str, args: List[str]) -> None:

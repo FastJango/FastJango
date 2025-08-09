@@ -14,7 +14,7 @@ from rich.console import Console
 from rich.logging import RichHandler
 from typing import Optional
 
-from fastjango.cli.commands import startproject, startapp, runserver
+from fastjango.cli.commands import startproject, startapp, runserver, makemigrations, migrate, shell
 from fastjango.core.logging import setup_logging
 from fastjango import __version__
 
@@ -113,6 +113,81 @@ def runserver(
         run_server(host, port, reload)
     except Exception as e:
         logger.error(f"Failed to start server: {str(e)}")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def makemigrations(
+    app_label: str = typer.Argument(..., help="App label"),
+    name: str = typer.Option(None, "--name", "-n", help="Migration name"),
+):
+    """
+    Create database migration files.
+    """
+    try:
+        from fastjango.cli.commands.makemigrations import make_migrations
+        
+        logger.info(f"Creating migrations for app '{app_label}'")
+        
+        migration_file = make_migrations(app_label, name)
+        
+        if migration_file:
+            logger.info(f"Created migration: {migration_file}")
+        else:
+            logger.info("No changes detected")
+    except Exception as e:
+        logger.error(f"Failed to create migrations: {str(e)}")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def migrate(
+    app_label: str = typer.Argument(None, help="App label (optional)"),
+    fake: bool = typer.Option(False, "--fake", help="Mark migrations as applied without running them"),
+    show: bool = typer.Option(False, "--show", help="Show migration status"),
+    rollback: str = typer.Option(None, "--rollback", help="Rollback specific migration"),
+):
+    """
+    Apply database migrations.
+    """
+    try:
+        from fastjango.cli.commands.migrate import migrate as run_migrate
+        
+        if show:
+            run_migrate(app_label=app_label, show_status=True)
+        elif rollback:
+            if not app_label:
+                logger.error("App label is required for rollback")
+                raise typer.Exit(code=1)
+            success = run_migrate(app_label=app_label, rollback=rollback)
+            if success:
+                logger.info(f"Rolled back migration: {rollback}")
+            else:
+                logger.warning(f"Migration '{rollback}' is not applied")
+        else:
+            applied_count = run_migrate(app_label=app_label, fake=fake)
+            logger.info(f"Applied {applied_count} migrations")
+    except Exception as e:
+        logger.error(f"Failed to apply migrations: {str(e)}")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def shell(
+    plain: bool = typer.Option(False, "--plain", help="Run a plain Python shell"),
+    command: str = typer.Option(None, "--command", "-c", help="Execute a command and exit"),
+):
+    """
+    Start an interactive Python shell with FastJango environment.
+    """
+    try:
+        from fastjango.cli.commands.shell import shell_command
+        
+        logger.info("Starting FastJango interactive shell")
+        
+        shell_command(plain=plain, command=command)
+    except Exception as e:
+        logger.error(f"Failed to start shell: {str(e)}")
         raise typer.Exit(code=1)
 
 
