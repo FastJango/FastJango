@@ -22,7 +22,7 @@ class CLITest(unittest.TestCase):
     
     def setUp(self):
         """Set up test environment."""
-        self.runner = CliRunner(mix_stderr=False)
+        self.runner = CliRunner()
     
     def test_version_flag(self):
         """Test --version flag displays the correct version and exits."""

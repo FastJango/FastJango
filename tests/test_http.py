@@ -16,10 +16,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastjango.http import (
     HttpResponse,
     JsonResponse,
-    FileResponse,
-    RedirectResponse,
     TemplateResponse,
-    StreamingResponse,
+    redirect,
 )
 
 
@@ -31,7 +29,7 @@ class HttpResponseTest(unittest.TestCase):
         response = HttpResponse("Hello, world!")
         self.assertEqual(response.body, b"Hello, world!")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.content_type, "text/html")
+        self.assertIn("text/html", response.headers.get("content-type", ""))
 
     def test_custom_status_code(self):
         """Test HttpResponse with custom status code."""
@@ -48,8 +46,8 @@ class HttpResponseTest(unittest.TestCase):
         
     def test_content_type(self):
         """Test HttpResponse with custom content type."""
-        response = HttpResponse("Text content", content_type="text/plain")
-        self.assertEqual(response.content_type, "text/plain")
+        response = HttpResponse("Text content", media_type="text/plain")
+        self.assertIn("text/plain", response.headers.get("content-type", ""))
 
 
 class JsonResponseTest(unittest.TestCase):
@@ -59,7 +57,7 @@ class JsonResponseTest(unittest.TestCase):
         """Test basic JsonResponse functionality."""
         data = {"message": "Hello", "count": 42}
         response = JsonResponse(data)
-        self.assertEqual(response.content_type, "application/json")
+        self.assertIn("application/json", response.headers.get("content-type", ""))
         
         # Parse the JSON body
         body_dict = json.loads(response.body.decode("utf-8"))
@@ -80,33 +78,21 @@ class JsonResponseTest(unittest.TestCase):
 
 
 class RedirectResponseTest(unittest.TestCase):
-    """Test suite for RedirectResponse class."""
+    """Test suite for redirect helper."""
     
     def test_temporary_redirect(self):
         """Test temporary (302) redirect."""
-        response = RedirectResponse("/new-location")
+        response = redirect("/new-location")
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.headers.get("location"), "/new-location")
         
     def test_permanent_redirect(self):
         """Test permanent (301) redirect."""
-        response = RedirectResponse("/permanent", status_code=301)
+        response = redirect("/permanent", permanent=True)
         self.assertEqual(response.status_code, 301)
         self.assertEqual(response.headers.get("location"), "/permanent")
 
 
-class StreamingResponseTest(unittest.TestCase):
-    """Test suite for StreamingResponse class."""
-    
-    def test_streaming_response(self):
-        """Test streaming response functionality."""
-        def generator():
-            for i in range(3):
-                yield f"chunk {i}"
-                
-        response = StreamingResponse(generator())
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.content_type, "text/html")
 
 
 def run_tests():

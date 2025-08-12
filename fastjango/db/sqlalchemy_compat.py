@@ -7,7 +7,7 @@ directly in FastJango apps while maintaining Django-like patterns.
 
 from typing import Any, Optional, Type, Union, Dict
 from sqlalchemy import Column, String, Integer, BigInteger, SmallInteger, Float, \
-    Boolean, Date, DateTime, Time, Text, Binary, Numeric, LargeBinary, ForeignKey as SAForeignKey
+    Boolean, Date, DateTime, Time, Text, Numeric, LargeBinary, ForeignKey as SAForeignKey
 from sqlalchemy.orm import relationship as SARelationship, declarative_base
 from sqlalchemy.ext.declarative import DeclarativeMeta
 from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
@@ -326,7 +326,7 @@ def relationship(*args, **kwargs):
 
 # Export commonly used SQLAlchemy types
 from sqlalchemy import String, Integer, BigInteger, SmallInteger, Float, \
-    Boolean, Date, DateTime, Time, Text, Binary, Numeric, LargeBinary
+    Boolean, Date, DateTime, Time, Text, Numeric, LargeBinary
 
 __all__ = [
     'SQLAlchemyModel', 'SQLAlchemyField', 'SQLAlchemyCharField', 'SQLAlchemyTextField',
@@ -339,5 +339,5 @@ __all__ = [
     'FloatField', 'BooleanField', 'DateField', 'DateTimeField', 'TimeField',
     'BinaryField', 'DecimalField', 'UUIDField', 'ForeignKey', 'relationship',
     'String', 'Integer', 'BigInteger', 'SmallInteger', 'Float', 'Boolean',
-    'Date', 'DateTime', 'Time', 'Text', 'Binary', 'Numeric', 'LargeBinary'
+    'Date', 'DateTime', 'Time', 'Text', 'Numeric', 'LargeBinary'
 ]
