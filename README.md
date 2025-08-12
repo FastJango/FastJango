@@ -1,168 +1,216 @@
 # FastJango
 
-FastJango is a fast web framework inspired by Django built on FastAPI. 
-It provides a familiar Django-like experience with the performance and modern features of FastAPI. FastJango prefers convention over configuration and simplifies development of API First Web Services.
+FastJango is a Django-inspired toolkit built on FastAPI. It gives you familiar Django-like primitives (URLs, middleware, forms, settings, pagination, a CLI) while leveraging FastAPI/Starlette performance.
 
-## Features
+## Features (implemented)
 
-- Django-like project structure
-- FastAPI's high performance
-- Type annotations and automatic validation
-- Dependency injection
-- Automatic API documentation with Swagger and ReDoc
-- Familiar Django-like URL patterns
-- FastAPI-powered REST API with automatic OpenAPI docs
-- Integrated authentication system
-- Django-like template system with Jinja2
-- ORM support via SQLAlchemy (planned)
+- Django-like URL patterns and resolver (`path`, `include`, `URLResolver`)
+- HTTP helpers: `HttpResponse`, `JsonResponse`, `redirect`
+- Middleware: CORS and Security (Django-like configuration style)
+- Forms with validation (Pydantic-powered)
+- Django-like settings object and helpers (`configure_settings`, `get_settings_instance`)
+- Pagination utilities (page number, limit/offset, cursor) with FastAPI integration
+- Project/app scaffolding and utilities via `fastjango-admin` CLI
+- Experimental ORM and SQLAlchemy compatibility (APIs present; still evolving)
 
-pip install typer rich fastapi uvicorn jinja2 python-multipart pydantic
-
-## Installation
+## Install
 
 ```bash
 pip install fastjango
 ```
 
-For development:
+For local development of this repo:
 
 ```bash
 git clone https://github.com/yourusername/fastjango.git
 cd fastjango
-pip install -e ".[dev]"
+pip install -e .
 ```
 
-## Quick Start
-
-### Create a new project
+## Quick start (CLI)
 
 ```bash
+# Create a project
 fastjango-admin startproject myproject
 cd myproject
-```
 
-### Create a new app
-
-```bash
+# Create an app inside the project
 fastjango-admin startapp myapp
-```
 
-Don't forget to add your app to `INSTALLED_APPS` in `settings.py`:
-
-```python
-INSTALLED_APPS = [
-    # FastJango apps
-    "myproject.core",
-    
-    # Your apps
-    "myapp",
-]
-```
-
-### Define models in myapp/models.py
-
-```python
-from fastjango.db import models
-from fastjango.core.exceptions import ValidationError
-
-
-class Item(models.Model):
-    name = models.CharField(max_length=100)
-    description = models.TextField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        ordering = ["-created_at"]
-    
-    def __str__(self):
-        return self.name
-```
-
-### Define routes in myapp/routes.py
-
-```python
-from fastapi import APIRouter, HTTPException, Depends, status
-from typing import List
-
-from fastjango.core.dependencies import get_current_user
-from .schemas import ItemCreate, ItemRead, ItemUpdate
-from .services import ItemService
-
-router = APIRouter(prefix="/items", tags=["items"])
-service = ItemService()
-
-
-@router.get("/", response_model=List[ItemRead])
-async def list_items(skip: int = 0, limit: int = 100):
-    return await service.get_all(skip=skip, limit=limit)
-
-
-@router.post("/", response_model=ItemRead, status_code=status.HTTP_201_CREATED)
-async def create_item(item: ItemCreate, current_user = Depends(get_current_user)):
-    return await service.create(item)
-```
-
-### Run the development server
-
-```bash
+# Run the dev server
 fastjango-admin runserver
 ```
 
-Or using the manage.py script:
+## URLs (Django-like)
+
+Define URL patterns using `path` and `include`, then register them on a FastAPI router via `URLResolver`.
+
+```python
+# urls.py
+from fastapi import APIRouter
+from fastjango.urls import path, include, URLResolver
+from fastjango.http import JsonResponse
+
+# Views
+def index(request):
+    return JsonResponse({"message": "Hello from FastJango"})
+
+def item_detail(request, id):
+    return JsonResponse({"id": id})
+
+# Patterns
+urlpatterns = [
+    path("/", index, name="index"),
+    path("/items/<int:id>", item_detail, name="item-detail"),
+]
+
+# Attach to FastAPI
+router = APIRouter()
+URLResolver(router).register(urlpatterns)
+```
+
+## HTTP helpers
+
+```python
+from fastjango.http import HttpResponse, JsonResponse, redirect
+
+# HTML/text
+resp = HttpResponse("OK", status_code=200)  # content-type text/html by default
+
+# JSON
+resp = JsonResponse({"ok": True}, status_code=201)
+
+# Redirects
+resp = redirect("/login", permanent=False)  # 302 by default
+```
+
+## Middleware
+
+CORS and Security middleware mirror Django-style configuration while running on Starlette.
+
+```python
+from fastapi import FastAPI
+from fastjango.middleware.cors import CORSMiddleware
+from fastjango.middleware.security import SecurityMiddleware
+
+app = FastAPI()
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allowed_origins=["https://example.com"],
+    allow_credentials=True,
+    allowed_methods=["GET", "POST"],
+    allowed_headers=["Content-Type"],
+)
+
+# Security headers
+app.add_middleware(
+    SecurityMiddleware,
+    secure_content_type_nosniff=True,
+    secure_browser_xss_filter=True,
+    secure_frame_deny=True,
+)
+```
+
+## Forms
+
+Define forms declaratively and validate incoming data.
+
+```python
+from fastjango.forms import Form, CharField, EmailField, BooleanField, ValidationError
+
+class ContactForm(Form):
+    name = CharField(max_length=100)
+    email = EmailField()
+    message = CharField(max_length=500, required=False)
+    subscribe = BooleanField(required=False)
+
+form = ContactForm(data={
+    "name": "Jane",
+    "email": "jane@example.com",
+    "message": "Hi!"
+})
+
+if form.is_valid():
+    # Access cleaned data
+    data = form.cleaned_data
+else:
+    # Field errors
+    errors = form.errors
+```
+
+## Settings (Django-like)
+
+Use a global settings instance or configure at startup.
+
+```python
+from fastjango.core.settings import configure_settings, get_settings_instance
+
+configure_settings({
+    "DEBUG": True,
+    "ALLOWED_HOSTS": ["localhost", "127.0.0.1"],
+    "PAGINATION_PAGE_SIZE": 20,
+})
+
+settings = get_settings_instance()
+print(settings.DEBUG)  # True
+```
+
+## Pagination
+
+Drop-in pagination helpers for FastAPI endpoints.
+
+```python
+from typing import Dict, Any, List
+from dataclasses import dataclass, asdict
+from fastapi import FastAPI, Request, Depends
+from fastjango.pagination import (
+    PageNumberPagination,
+    get_page_number_pagination,
+)
+
+app = FastAPI()
+
+@dataclass
+class Product:
+    id: int
+    name: str
+
+DATA = [Product(id=i, name=f"Item {i}") for i in range(1, 101)]
+
+@app.get("/products")
+async def get_products(request: Request, pagination: Dict[str, Any] = Depends(get_page_number_pagination)):
+    paginator = PageNumberPagination(page_size=10)
+    page_items = paginator.paginate_queryset(DATA, request)
+    payload = [asdict(p) for p in page_items]
+    return paginator.get_paginated_response(payload, total_count=len(DATA), request=request)
+```
+
+## CLI commands
 
 ```bash
-python manage.py runserver
+fastjango-admin --help
+fastjango-admin --version
+fastjango-admin startproject myproject
+fastjango-admin startapp myapp
+fastjango-admin runserver --host 0.0.0.0 --port 8000
+fastjango-admin makemigrations myapp
+fastjango-admin migrate
 ```
 
-Visit http://127.0.0.1:8000/docs to see the automatic API documentation.
+## Notes on the ORM
 
-## Project Structure
-
-When you create a new project, FastJango will generate the following structure:
-
-```
-myproject/
-├── myproject/
-│   ├── __init__.py
-│   ├── asgi.py
-│   ├── settings.py
-│   ├── urls.py
-│   └── wsgi.py
-├── templates/
-└── manage.py
-```
-
-When you create a new app, FastJango will generate:
-
-```
-myapp/
-├── __init__.py
-├── models.py
-├── routes.py
-├── schemas.py
-├── services.py
-└── tests/
-    ├── __init__.py
-    ├── test_models.py
-    └── test_routes.py
-```
+- The repository includes an experimental ORM layer and SQLAlchemy compatibility utilities.
+- APIs are present but still evolving; expect changes and incomplete coverage.
 
 ## Built With
 
-* [FastAPI](https://fastapi.tiangolo.com/) - Web framework
-* [Pydantic](https://pydantic-docs.helpmanual.io/) - Data validation
-* [Typer](https://typer.tiangolo.com/) - CLI commands
-* [SQLAlchemy](https://www.sqlalchemy.org/) - ORM (planned)
+- FastAPI / Starlette
+- Pydantic
+- Typer
+- SQLAlchemy (compat layer)
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
-
-# Make sure to reinstall after changes
-pip install -e .
-
-# Then start your project
-./fastjango-admin.py startproject myproject
-cd myproject
-./fastjango-admin.py runserver 
+MIT License. See `LICENSE`. 
