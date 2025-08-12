@@ -4,14 +4,29 @@ FastJango is a Django-inspired toolkit built on FastAPI. It gives you familiar D
 
 ## Features (implemented)
 
-- Django-like URL patterns and resolver (`path`, `include`, `URLResolver`)
-- HTTP helpers: `HttpResponse`, `JsonResponse`, `redirect`
-- Middleware: CORS and Security (Django-like configuration style)
-- Forms with validation (Pydantic-powered)
-- Django-like settings object and helpers (`configure_settings`, `get_settings_instance`)
-- Pagination utilities (page number, limit/offset, cursor) with FastAPI integration
-- Project/app scaffolding and utilities via `fastjango-admin` CLI
-- Experimental ORM and SQLAlchemy compatibility (APIs present; still evolving)
+- [Django-like URL patterns and resolver](#urls-django-like) (`path`, `include`, `URLResolver`) · [module](/fastjango/urls.py)
+- [HTTP helpers](#http-helpers): `HttpResponse`, `JsonResponse`, `redirect` · [module](/fastjango/http.py)
+- [Middleware](#middleware): CORS and Security (Django-like configuration style) · [CORS](/fastjango/middleware/cors.py) · [Security](/fastjango/middleware/security.py)
+- [Forms](#forms) with validation (Pydantic-powered) · [module](/fastjango/forms/forms.py)
+- [Settings](#settings-django-like) (Django-like) and helpers (`configure_settings`, `get_settings_instance`) · [module](/fastjango/core/settings.py)
+- [Pagination](#pagination) utilities (page number, limit/offset, cursor) with FastAPI integration · [package](/fastjango/pagination)
+- [CLI](#cli-commands) project/app scaffolding and utilities · [entrypoint](/fastjango/cli/main.py)
+- Experimental ORM and SQLAlchemy compatibility (APIs present; still evolving) · [ORM](/fastjango/db) · [SA compat](/fastjango/db/sqlalchemy_compat.py)
+
+## Table of contents
+
+- [Install](#install)
+- [Quick start (CLI)](#quick-start-cli)
+- [URLs (Django-like)](#urls-django-like)
+- [HTTP helpers](#http-helpers)
+- [Middleware](#middleware)
+- [Forms](#forms)
+- [Settings (Django-like)](#settings-django-like)
+- [Pagination](#pagination)
+- [CLI commands](#cli-commands)
+- [Notes on the ORM](#notes-on-the-orm)
+- [Built With](#built-with)
+- [License](#license)
 
 ## Install
 
@@ -43,6 +58,8 @@ fastjango-admin runserver
 
 ## URLs (Django-like)
 
+See: [`fastjango.urls`](/fastjango/urls.py). Also refer to tests: [`tests/test_url_conf.py`](/tests/test_url_conf.py).
+
 Define URL patterns using `path` and `include`, then register them on a FastAPI router via `URLResolver`.
 
 ```python
@@ -71,6 +88,8 @@ URLResolver(router).register(urlpatterns)
 
 ## HTTP helpers
 
+See: [`fastjango/http.py`](/fastjango/http.py).
+
 ```python
 from fastjango.http import HttpResponse, JsonResponse, redirect
 
@@ -85,6 +104,8 @@ resp = redirect("/login", permanent=False)  # 302 by default
 ```
 
 ## Middleware
+
+See: [`fastjango/middleware/cors.py`](/fastjango/middleware/cors.py) and [`fastjango/middleware/security.py`](/fastjango/middleware/security.py). Example usage is also shown in [`test_pagination_and_cors.py`](/test_pagination_and_cors.py).
 
 CORS and Security middleware mirror Django-style configuration while running on Starlette.
 
@@ -115,6 +136,8 @@ app.add_middleware(
 
 ## Forms
 
+See: [`fastjango/forms/forms.py`](/fastjango/forms/forms.py).
+
 Define forms declaratively and validate incoming data.
 
 ```python
@@ -142,6 +165,8 @@ else:
 
 ## Settings (Django-like)
 
+See: [`fastjango/core/settings.py`](/fastjango/core/settings.py).
+
 Use a global settings instance or configure at startup.
 
 ```python
@@ -158,6 +183,8 @@ print(settings.DEBUG)  # True
 ```
 
 ## Pagination
+
+See: [`fastjango/pagination`](/fastjango/pagination). Full example API available in [`test_pagination_and_cors.py`](/test_pagination_and_cors.py).
 
 Drop-in pagination helpers for FastAPI endpoints.
 
@@ -189,6 +216,8 @@ async def get_products(request: Request, pagination: Dict[str, Any] = Depends(ge
 
 ## CLI commands
 
+See: [`fastjango/cli/main.py`](/fastjango/cli/main.py).
+
 ```bash
 fastjango-admin --help
 fastjango-admin --version
@@ -203,14 +232,16 @@ fastjango-admin migrate
 
 - The repository includes an experimental ORM layer and SQLAlchemy compatibility utilities.
 - APIs are present but still evolving; expect changes and incomplete coverage.
+- Relevant modules: [`fastjango/db`](/fastjango/db) · [`fastjango/db/sqlalchemy_compat.py`](/fastjango/db/sqlalchemy_compat.py)
 
 ## Built With
 
-- FastAPI / Starlette
-- Pydantic
-- Typer
-- SQLAlchemy (compat layer)
+- [FastAPI](https://fastapi.tiangolo.com/)
+- [Starlette](https://www.starlette.io/)
+- [Pydantic](https://docs.pydantic.dev/)
+- [Typer](https://typer.tiangolo.com/)
+- [SQLAlchemy](https://www.sqlalchemy.org/)
 
 ## License
 
-MIT License. See `LICENSE`. 
+MIT License. See [`LICENSE`](/LICENSE). 
