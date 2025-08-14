@@ -14,7 +14,6 @@ from rich.console import Console
 from rich.logging import RichHandler
 from typing import Optional
 
-from fastjango.cli.commands import startproject, startapp, runserver, makemigrations, migrate, shell
 from fastjango.core.logging import setup_logging
 from fastjango import __version__
 
@@ -33,22 +32,16 @@ logger = logging.getLogger("fastjango.cli")
 
 
 @app.callback()
-def callback(
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose output"),
-    version: Optional[bool] = typer.Option(None, "--version", help="Show the version and exit"),
-):
-    """
-    FastJango command-line utility for administrative tasks.
-    """
-    if version:
-        console.print(f"FastJango v{__version__}")
-        raise typer.Exit()
-        
-    # Configure logging based on verbosity
-    log_level = logging.DEBUG if verbose else logging.INFO
-    setup_logging(log_level)
-    if verbose:
-        logger.debug("Verbose logging enabled")
+def callback():
+    """FastJango command-line utility for administrative tasks."""
+    # Minimal callback to avoid global parameter issues
+    pass
+
+
+@app.command()
+def version():
+    """Show the FastJango version and exit."""
+    console.print(f"FastJango v{__version__}")
 
 
 @app.command()
@@ -62,6 +55,7 @@ def startproject(
     Creates a new FastJango project with the given name.
     """
     try:
+        # Lazy import to avoid loading heavy modules at CLI import time
         from fastjango.cli.commands.startproject import create_project
 
         target_dir = directory or os.getcwd()
@@ -98,7 +92,7 @@ def startapp(
 
 @app.command()
 def runserver(
-    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Host to bind to"),
+    host: str = typer.Option("127.0.0.1", "--host", help="Host to bind to"),
     port: int = typer.Option(8000, "--port", "-p", help="Port to bind to"),
     reload: bool = typer.Option(True, help="Enable auto-reload on code changes"),
 ):
