@@ -10,7 +10,6 @@ from pydantic import BaseModel, Field, ValidationError as PydanticValidationErro
 from pydantic.fields import FieldInfo
 
 from fastjango.core.exceptions import ValidationError
-from fastjango.db import Model
 
 
 class FormError(Exception):
@@ -597,7 +596,7 @@ class UserRegistrationForm(Form):
     """Example user registration form."""
     
     username: str = Field(..., min_length=3, max_length=30)
-    email: str = Field(..., regex=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+    email: str = Field(..., pattern=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
     password: str = Field(..., min_length=8)
     confirm_password: str = Field(..., min_length=8)
     

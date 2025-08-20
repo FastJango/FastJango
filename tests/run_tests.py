@@ -83,11 +83,12 @@ def run_tests(test_modules=None, verbosity=1):
     suite = unittest.TestSuite()
     
     # Add tests from each module
+    loader = unittest.defaultTestLoader
     for module_path in test_modules:
         try:
             test_cases = load_tests_from_module(module_path)
             for test_case in test_cases:
-                suite.addTest(unittest.makeSuite(test_case))
+                suite.addTests(loader.loadTestsFromTestCase(test_case))
             print(f"Loaded tests from {os.path.basename(module_path)}")
         except Exception as e:
             print(f"Error loading tests from {module_path}: {e}")
