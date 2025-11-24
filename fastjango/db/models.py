@@ -6,20 +6,50 @@ import inspect
 from typing import Any, Dict, List, Optional, Type, Union
 from datetime import datetime
 
-from sqlalchemy import Column, Integer, MetaData, Table
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Session
+from sqlalchemy import Column, Integer, MetaData, Table, ForeignKey as SAForeignKey
+from sqlalchemy.orm import Session, declarative_base, DeclarativeMeta
 
-from .fields import Field
+from .fields import (
+    Field, CharField, TextField, IntegerField, BigIntegerField,
+    SmallIntegerField, PositiveIntegerField, PositiveSmallIntegerField,
+    FloatField, DecimalField, BooleanField, NullBooleanField,
+    DateField, DateTimeField, TimeField, DurationField,
+    BinaryField, FileField, ImageField, FilePathField,
+    EmailField, URLField, SlugField, UUIDField, IPAddressField,
+    GenericIPAddressField, CommaSeparatedIntegerField,
+    ForeignKey, OneToOneField, ManyToManyField
+)
 from .queryset import QuerySet
 from .connection import get_session
 from .exceptions import ValidationError, ObjectDoesNotExist, MultipleObjectsReturned
+
+# Delete behaviors
+CASCADE = 'CASCADE'
+PROTECT = 'PROTECT'
+SET_NULL = 'SET_NULL'
+SET_DEFAULT = 'SET_DEFAULT'
+DO_NOTHING = 'DO_NOTHING'
 
 # Create base class for all models
 Base = declarative_base()
 
 # Global metadata for all models
 metadata = MetaData()
+
+
+class Options:
+    """
+    Options class to mimic Django's _meta.
+    """
+    def __init__(self, meta=None, app_label=None):
+        self.meta = meta
+        self.app_label = getattr(meta, 'app_label', app_label)
+        self.db_table = getattr(meta, 'db_table', getattr(meta, 'table_name', None))
+
+    def __getattr__(self, name):
+        if self.meta and hasattr(self.meta, name):
+            return getattr(self.meta, name)
+        raise AttributeError(f"'Options' object has no attribute '{name}'")
 
 
 class Manager:
@@ -77,6 +107,18 @@ class Manager:
             Filtered QuerySet
         """
         return self.get_queryset().exclude(**kwargs)
+
+    def order_by(self, *args, **kwargs) -> QuerySet:
+        """
+        Order objects.
+
+        Args:
+            *args: Fields to order by
+
+        Returns:
+            Ordered QuerySet
+        """
+        return self.get_queryset().order_by(*args, **kwargs)
     
     def get(self, **kwargs) -> Any:
         """
@@ -182,26 +224,18 @@ class Manager:
         return self.get_queryset().exists()
 
 
-class ModelMeta(type):
+class ModelMeta(DeclarativeMeta):
     """
     Metaclass for Model to set up SQLAlchemy table and fields.
     """
     
-    def __new__(mcs, name, bases, attrs):
+    def __init__(cls, name, bases, attrs):
         """
-        Create a new model class.
-        
-        Args:
-            name: Class name
-            bases: Base classes
-            attrs: Class attributes
-            
-        Returns:
-            New model class
+        Initialize the model class.
         """
         # Skip if this is the base Model class
         if name == 'Model':
-            return super().__new__(mcs, name, bases, attrs)
+            return super().__init__(name, bases, attrs)
         
         # Collect fields from the class
         fields = {}
@@ -225,41 +259,83 @@ class ModelMeta(type):
                 if hasattr(value, 'get_relationship'):
                     relationships[key] = value
         
-        # Create SQLAlchemy table
-        table_name = attrs.get('Meta', {}).table_name if hasattr(attrs, 'Meta') else name.lower()
-        table = Table(table_name, metadata, *columns.values())
+        # Determine table name
+        table_name = None
+        if 'Meta' in attrs:
+            meta = attrs['Meta']
+            if hasattr(meta, 'db_table'):
+                table_name = meta.db_table
+            elif hasattr(meta, 'table_name'):
+                table_name = meta.table_name
+
+        if table_name is None:
+             table_name = name.lower()
+
+        # Set __tablename__ if not present, so DeclarativeMeta can do its job
+        if not hasattr(cls, '__tablename__'):
+            setattr(cls, '__tablename__', table_name)
+
+        # Set _fields and _relationships
+        setattr(cls, '_fields', fields)
+        setattr(cls, '_relationships', relationships)
         
-        # Add table to attrs
-        attrs['__table__'] = table
-        attrs['_fields'] = fields
-        attrs['_relationships'] = relationships
+        # Set _meta
+        meta_class = attrs.get('Meta', getattr(cls, 'Meta', None))
+        setattr(cls, '_meta', Options(meta_class))
         
         # Add manager
         if 'objects' not in attrs:
-            attrs['objects'] = Manager(None)  # Will be set after class creation
+            setattr(cls, 'objects', Manager(cls))
         
         # Add Meta class if not present
         if 'Meta' not in attrs:
             class Meta:
                 pass
-            attrs['Meta'] = Meta
-        
-        # Create the class
-        cls = super().__new__(mcs, name, bases, attrs)
-        
+            setattr(cls, 'Meta', Meta)
+
         # Set manager's model
-        cls.objects.model = cls
+        if hasattr(cls, 'objects'):
+            cls.objects.model = cls
         
-        # Add properties for fields
-        for field_name, field in fields.items():
-            setattr(cls, field_name, field)
-        
+        # Replace fields with SQLAlchemy columns on the class
+        for field_name, column in columns.items():
+            if field_name in relationships:
+                # For relationships (ForeignKey, OneToOne), append _id to column name
+                setattr(cls, f"{field_name}_id", column)
+            else:
+                setattr(cls, field_name, column)
+
         # Add properties for relationships
         for rel_name, rel_field in relationships.items():
             rel_property = rel_field.get_relationship(cls)
             setattr(cls, rel_name, rel_property)
-        
-        return cls
+
+            # Create M2M table if needed
+            if isinstance(rel_field, ManyToManyField) and not rel_field.through:
+                to_name = rel_field.to.lower() if isinstance(rel_field.to, str) else rel_field.to.__name__.lower()
+                m2m_table_name = f"{name.lower()}_{to_name}"
+
+                # Create association table if it doesn't exist
+                # Use the class's metadata (from Base)
+                if m2m_table_name not in cls.metadata.tables:
+                    # We need column names. Usually model_id and other_id.
+                    # We assume 'id' is PK for both.
+
+                    # Target table name for ForeignKey
+                    target_table = to_name
+                    # Current table name
+                    source_table = table_name
+
+                    Table(
+                        m2m_table_name,
+                        cls.metadata,
+                        Column('id', Integer, primary_key=True, autoincrement=True),
+                        Column(f"{name.lower()}_id", Integer, SAForeignKey(f"{source_table}.id", ondelete="CASCADE")),
+                        Column(f"{to_name}_id", Integer, SAForeignKey(f"{target_table}.id", ondelete="CASCADE"))
+                    )
+
+        # We need to call super().__init__
+        super().__init__(name, bases, attrs)
 
 
 class Model(Base, metaclass=ModelMeta):
@@ -267,6 +343,8 @@ class Model(Base, metaclass=ModelMeta):
     Base model class for FastJango ORM.
     """
     
+    __abstract__ = True
+
     # Default primary key
     id = Column(Integer, primary_key=True, autoincrement=True)
     
@@ -281,14 +359,12 @@ class Model(Base, metaclass=ModelMeta):
         Args:
             **kwargs: Field values
         """
-        # Validate and set field values
+        # Set field values
         for field_name, value in kwargs.items():
-            if field_name in self._fields:
-                field = self._fields[field_name]
-                validated_value = field.validate(value)
-                setattr(self, field_name, validated_value)
-            else:
-                setattr(self, field_name, value)
+            # We skip validation here to match Django behavior (validate on full_clean/save)
+            # However, we might want to perform type conversion if fields supported it via to_python
+            # For now, just set the value.
+            setattr(self, field_name, value)
         
         # Set auto_now_add fields
         for field_name, field in self._fields.items():
@@ -376,6 +452,19 @@ class Model(Base, metaclass=ModelMeta):
         if errors:
             raise ValidationError(errors)
     
+    def is_valid(self) -> bool:
+        """
+        Check if the model instance is valid.
+
+        Returns:
+            True if valid, False otherwise
+        """
+        try:
+            self.full_clean()
+            return True
+        except ValidationError:
+            return False
+
     def clean(self) -> None:
         """
         Custom validation method. Override in subclasses.

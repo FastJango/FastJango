@@ -3,6 +3,7 @@ Database connection management for FastJango ORM.
 """
 
 import os
+import importlib
 from typing import Optional, Dict, Any
 from contextlib import contextmanager
 
@@ -18,6 +19,7 @@ logger = Logger("fastjango.db.connection")
 _engine: Optional[Engine] = None
 _session_factory: Optional[sessionmaker] = None
 _session: Optional[Session] = None
+_scoped_session: Optional[scoped_session] = None
 
 
 def get_database_config() -> Dict[str, Any]:
@@ -121,7 +123,7 @@ def get_session_factory() -> sessionmaker:
     
     if _session_factory is None:
         engine = get_engine()
-        _session_factory = sessionmaker(bind=engine)
+        _session_factory = sessionmaker(bind=engine, expire_on_commit=False)
         logger.debug("Created session factory")
     
     return _session_factory
@@ -134,8 +136,11 @@ def get_session() -> Session:
     Returns:
         SQLAlchemy session
     """
-    session_factory = get_session_factory()
-    return session_factory()
+    global _scoped_session
+    if _scoped_session is None:
+        session_factory = get_session_factory()
+        _scoped_session = scoped_session(session_factory)
+    return _scoped_session()
 
 
 @contextmanager

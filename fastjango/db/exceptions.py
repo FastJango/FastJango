@@ -2,7 +2,7 @@
 Database exceptions for FastJango ORM.
 """
 
-from fastjango.core.exceptions import FastJangoError
+from fastjango.core.exceptions import FastJangoError, ObjectDoesNotExist, MultipleObjectsReturned, ValidationError as CoreValidationError
 
 
 class DatabaseError(FastJangoError):
@@ -35,7 +35,7 @@ class NotSupportedError(DatabaseError):
     pass
 
 
-class ValidationError(FastJangoError):
+class ValidationError(CoreValidationError):
     """Exception for model validation errors."""
     
     def __init__(self, message_dict=None, message=None, *args, **kwargs):
@@ -46,6 +46,10 @@ class ValidationError(FastJangoError):
             message_dict: Dictionary mapping field names to error messages
             message: Error message
         """
+        if message_dict is not None and not isinstance(message_dict, dict) and message is None:
+            message = message_dict
+            message_dict = None
+
         if message_dict is not None and message is not None:
             raise ValueError("Cannot specify both message_dict and message")
         
@@ -56,4 +60,4 @@ class ValidationError(FastJangoError):
             message = ", ".join(f"{field}: {', '.join(msgs) if isinstance(msgs, list) else msgs}" 
                               for field, msgs in message_dict.items())
         
-        super().__init__(message, *args, **kwargs)
+        super().__init__(message=message, *args, **kwargs)
