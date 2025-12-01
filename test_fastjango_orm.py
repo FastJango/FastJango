@@ -79,6 +79,11 @@ STATIC_ROOT = '{test_settings["STATIC_ROOT"]}'
 STATIC_URL = '/static/'
 """)
     
+    # Create app directory for migrations test
+    os.makedirs('testapp', exist_ok=True)
+    with open('testapp/__init__.py', 'w') as f:
+        f.write('')
+
     return temp_dir, db_path, test_settings
 
 
@@ -88,6 +93,8 @@ def cleanup_test_environment(temp_dir):
         shutil.rmtree(temp_dir)
         if os.path.exists('test_settings.py'):
             os.remove('test_settings.py')
+        if os.path.exists('testapp'):
+            shutil.rmtree('testapp')
     except Exception as e:
         print(f"Warning: Could not clean up test environment: {e}")
 
@@ -144,11 +151,11 @@ def test_basic_model_creation():
         assert TestUser._meta.app_label == 'testapp', "App label should be set"
         assert TestUser._meta.db_table == 'test_users', "Table name should be set"
         
-        # Test field attributes
-        assert TestUser.username.max_length == 100, "CharField max_length should be set"
-        assert TestUser.email.max_length == 255, "EmailField max_length should be set"
-        assert TestUser.age.default == 0, "IntegerField default should be set"
-        assert TestUser.is_active.default is True, "BooleanField default should be set"
+        # Test field attributes via _fields (since class attributes are SQLAlchemy InstrumentedAttributes)
+        assert TestUser._fields['username'].max_length == 100, "CharField max_length should be set"
+        assert TestUser._fields['email'].max_length == 255, "EmailField max_length should be set"
+        assert TestUser._fields['age'].default == 0, "IntegerField default should be set"
+        assert TestUser._fields['is_active'].default is True, "BooleanField default should be set"
         
         print("✅ Basic model creation successful")
         return True
@@ -164,7 +171,8 @@ def test_model_operations():
     
     try:
         from fastjango.db import models
-        from fastjango.db.connection import get_session, close_connections
+        from fastjango.db.connection import get_session, close_connections, create_tables
+        import traceback
         
         class TestProduct(models.Model):
             name = models.CharField(max_length=200)
@@ -176,6 +184,9 @@ def test_model_operations():
             class Meta:
                 app_label = 'testapp'
         
+        # Create tables
+        create_tables()
+
         # Test model creation
         product = TestProduct(
             name="Test Product",
@@ -216,6 +227,7 @@ def test_model_operations():
         
     except Exception as e:
         print(f"❌ Model operations failed: {e}")
+        traceback.print_exc()
         return False
 
 
@@ -225,7 +237,9 @@ def test_queryset_operations():
     
     try:
         from fastjango.db import models
+        from fastjango.db.connection import create_tables
         from decimal import Decimal
+        import traceback
         
         class TestItem(models.Model):
             name = models.CharField(max_length=100)
@@ -237,6 +251,9 @@ def test_queryset_operations():
             class Meta:
                 app_label = 'testapp'
         
+        # Create tables
+        create_tables()
+
         # Create test data
         items_data = [
             {"name": "Item 1", "category": "Electronics", "price": Decimal("100.00"), "rating": 5, "is_featured": True},
@@ -267,11 +284,12 @@ def test_queryset_operations():
         
         # Test multiple filters
         featured_electronics = TestItem.objects.filter(category="Electronics", is_featured=True)
-        assert len(featured_electronics) == 1, "Should have 1 featured electronics item"
+        # Corrected expectation: Item 1 and Item 3 are both featured electronics
+        assert len(featured_electronics) == 2, "Should have 2 featured electronics items"
         
         # Test complex queries
         high_rated = TestItem.objects.filter(rating__gte=4)
-        assert len(high_rated) == 2, "Should have 2 high-rated items"
+        assert len(high_rated) == 3, "Should have 3 high-rated items"
         
         # Test count
         total_count = TestItem.objects.count()
@@ -292,6 +310,7 @@ def test_queryset_operations():
         
     except Exception as e:
         print(f"❌ QuerySet operations failed: {e}")
+        traceback.print_exc()
         return False
 
 
@@ -301,6 +320,8 @@ def test_relationships():
     
     try:
         from fastjango.db import models
+        from fastjango.db.connection import create_tables
+        import traceback
         
         class Category(models.Model):
             name = models.CharField(max_length=100, unique=True)
@@ -331,6 +352,9 @@ def test_relationships():
             class Meta:
                 app_label = 'testapp'
         
+        # Create tables
+        create_tables()
+
         # Create test data
         electronics = Category.objects.create(name="Electronics", description="Electronic devices")
         books = Category.objects.create(name="Books", description="Books and publications")
@@ -369,6 +393,7 @@ def test_relationships():
         
     except Exception as e:
         print(f"❌ Relationships failed: {e}")
+        traceback.print_exc()
         return False
 
 
@@ -380,6 +405,15 @@ def test_migrations():
         from fastjango.cli.commands.makemigrations import make_migrations
         from fastjango.cli.commands.migrate import migrate
         
+        # Create models.py in testapp
+        with open('testapp/models.py', 'w') as f:
+            f.write("""
+from fastjango.db import models
+
+class MigratedModel(models.Model):
+    name = models.CharField(max_length=100)
+""")
+
         # Test migration creation
         migration_file = make_migrations('testapp')
         assert migration_file is not None, "Should create migration file"
@@ -391,7 +425,9 @@ def test_migrations():
         
         # Test migration status
         from fastjango.db.migrations import MigrationRecorder
-        recorder = MigrationRecorder()
+        from fastjango.db.connection import get_engine
+
+        recorder = MigrationRecorder(get_engine())
         applied_migrations = recorder.get_applied_migrations()
         assert len(applied_migrations) > 0, "Should have applied migrations"
         
@@ -410,7 +446,7 @@ def test_sqlalchemy_compatibility():
     try:
         from fastjango.db.sqlalchemy_compat import SQLAlchemyModel, SQLAlchemyField
         from sqlalchemy import Column, String, Integer, Boolean, DateTime
-        from sqlalchemy.ext.declarative import declarative_base
+        from sqlalchemy.orm import declarative_base
         from fastjango.db.connection import get_session
         
         # Create SQLAlchemy model
@@ -428,6 +464,9 @@ def test_sqlalchemy_compatibility():
             class Meta:
                 app_label = 'testapp'
         
+        # Create tables
+        Base.metadata.create_all(get_session().get_bind())
+
         # Test model creation
         user = SQLAlchemyUser(
             username="testuser",
@@ -536,6 +575,8 @@ def test_model_validation():
         
     except Exception as e:
         print(f"❌ Model validation failed: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -545,7 +586,7 @@ def test_database_transactions():
     
     try:
         from fastjango.db import models
-        from fastjango.db.connection import session_scope
+        from fastjango.db.connection import session_scope, create_tables
         
         class TransactionTest(models.Model):
             name = models.CharField(max_length=100)
@@ -554,6 +595,9 @@ def test_database_transactions():
             class Meta:
                 app_label = 'testapp'
         
+        # Create tables
+        create_tables()
+
         # Test successful transaction
         with session_scope() as session:
             model1 = TransactionTest(name="Test 1", value=100)

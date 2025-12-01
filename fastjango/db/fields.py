@@ -4,19 +4,51 @@ Model fields for FastJango ORM.
 
 import re
 import uuid
-from datetime import datetime, date, time, timedelta
+from datetime import datetime as dt_datetime, date as dt_date, time as dt_time, timedelta
 from decimal import Decimal
 from typing import Any, Optional, Union, List, Dict
 from pathlib import Path
 
 from sqlalchemy import Column, String, Integer, BigInteger, SmallInteger, Float, \
-    Boolean, Date, DateTime, Time, Text, Binary, Numeric, LargeBinary
-from sqlalchemy.orm import relationship
+    Boolean, Date, DateTime, Time, Text, Numeric, LargeBinary, ForeignKey as SAForeignKey
+from sqlalchemy.orm import relationship, backref
 from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
 from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.ext.hybrid import hybrid_property
 
 from .exceptions import ValidationError
+
+
+class RelatedManager(list):
+    """
+    List subclass that mimics Django's RelatedManager.
+    """
+    def add(self, *objs):
+        """Add objects to the relationship."""
+        for obj in objs:
+            self.append(obj)
+
+    def remove(self, *objs):
+        """Remove objects from the relationship."""
+        for obj in objs:
+            if obj in self:
+                super().remove(obj)
+
+    def all(self):
+        """Get all objects."""
+        return self
+
+    def count(self):
+        """Count objects."""
+        return len(self)
+
+    def first(self):
+        """Get first object."""
+        return self[0] if self else None
+
+    def last(self):
+        """Get last object."""
+        return self[-1] if self else None
 
 
 class Field:
@@ -201,14 +233,23 @@ class IntegerField(Field):
             default=self.default
         )
     
+    def to_python(self, value: Any) -> Any:
+        """Convert value to integer."""
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            raise ValidationError(f"{self.name} must be an integer")
+
     def validate(self, value: Any) -> Any:
         """Validate IntegerField value."""
         value = super().validate(value)
         if value is not None:
-            try:
-                value = int(value)
-            except (ValueError, TypeError):
-                raise ValidationError(f"{self.name} must be an integer")
+            if hasattr(self, 'min_value') and self.min_value is not None and value < self.min_value:
+                raise ValidationError(f"{self.name} must be at least {self.min_value}")
+            if hasattr(self, 'max_value') and self.max_value is not None and value > self.max_value:
+                raise ValidationError(f"{self.name} must be at most {self.max_value}")
         return value
 
 
@@ -310,14 +351,18 @@ class FloatField(Field):
             default=self.default
         )
     
+    def to_python(self, value: Any) -> Any:
+        """Convert value to float."""
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            raise ValidationError(f"{self.name} must be a number")
+
     def validate(self, value: Any) -> Any:
         """Validate FloatField value."""
         value = super().validate(value)
-        if value is not None:
-            try:
-                value = float(value)
-            except (ValueError, TypeError):
-                raise ValidationError(f"{self.name} must be a number")
         return value
 
 
@@ -349,16 +394,28 @@ class DecimalField(Field):
             default=self.default
         )
     
+    def to_python(self, value: Any) -> Any:
+        """Convert value to Decimal."""
+        if value is None:
+            return None
+        if isinstance(value, Decimal):
+            return value
+        try:
+            return Decimal(str(value))
+        except (ValueError, TypeError):
+            raise ValidationError(f"{self.name} must be a valid decimal number")
+
     def validate(self, value: Any) -> Any:
         """Validate DecimalField value."""
         value = super().validate(value)
         if value is not None:
-            try:
-                value = Decimal(str(value))
-                if len(str(value).replace('.', '')) > self.max_digits:
-                    raise ValidationError(f"{self.name} cannot have more than {self.max_digits} digits")
-            except (ValueError, TypeError):
-                raise ValidationError(f"{self.name} must be a valid decimal number")
+            if len(str(value).replace('.', '')) > self.max_digits:
+                raise ValidationError(f"{self.name} cannot have more than {self.max_digits} digits")
+
+            if hasattr(self, 'min_value') and self.min_value is not None and value < self.min_value:
+                raise ValidationError(f"{self.name} must be at least {self.min_value}")
+            if hasattr(self, 'max_value') and self.max_value is not None and value > self.max_value:
+                raise ValidationError(f"{self.name} must be at most {self.max_value}")
         return value
 
 
@@ -378,20 +435,23 @@ class BooleanField(Field):
             default=self.default
         )
     
+    def to_python(self, value: Any) -> Any:
+        """Convert value to boolean."""
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            value = value.lower()
+            if value in ('true', '1', 'yes', 'on'):
+                return True
+            elif value in ('false', '0', 'no', 'off'):
+                return False
+        raise ValidationError(f"{self.name} must be True or False")
+
     def validate(self, value: Any) -> Any:
         """Validate BooleanField value."""
         value = super().validate(value)
-        if value is not None:
-            if isinstance(value, str):
-                value = value.lower()
-                if value in ('true', '1', 'yes', 'on'):
-                    value = True
-                elif value in ('false', '0', 'no', 'off'):
-                    value = False
-                else:
-                    raise ValidationError(f"{self.name} must be True or False")
-            elif not isinstance(value, bool):
-                raise ValidationError(f"{self.name} must be True or False")
         return value
 
 
@@ -421,17 +481,22 @@ class DateField(Field):
             default=self.default
         )
     
+    def to_python(self, value: Any) -> Any:
+        """Convert value to date."""
+        if value is None:
+            return None
+        if isinstance(value, dt_date):
+            return value
+        if isinstance(value, str):
+            try:
+                return dt_datetime.strptime(value, '%Y-%m-%d').date()
+            except ValueError:
+                raise ValidationError(f"{self.name} must be a valid date (YYYY-MM-DD)")
+        raise ValidationError(f"{self.name} must be a date")
+
     def validate(self, value: Any) -> Any:
         """Validate DateField value."""
         value = super().validate(value)
-        if value is not None:
-            if isinstance(value, str):
-                try:
-                    value = datetime.strptime(value, '%Y-%m-%d').date()
-                except ValueError:
-                    raise ValidationError(f"{self.name} must be a valid date (YYYY-MM-DD)")
-            elif not isinstance(value, date):
-                raise ValidationError(f"{self.name} must be a date")
         return value
 
 
@@ -463,17 +528,22 @@ class DateTimeField(Field):
             default=self.default
         )
     
+    def to_python(self, value: Any) -> Any:
+        """Convert value to datetime."""
+        if value is None:
+            return None
+        if isinstance(value, dt_datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return dt_datetime.fromisoformat(value.replace('Z', '+00:00'))
+            except ValueError:
+                raise ValidationError(f"{self.name} must be a valid datetime")
+        raise ValidationError(f"{self.name} must be a datetime")
+
     def validate(self, value: Any) -> Any:
         """Validate DateTimeField value."""
         value = super().validate(value)
-        if value is not None:
-            if isinstance(value, str):
-                try:
-                    value = datetime.fromisoformat(value.replace('Z', '+00:00'))
-                except ValueError:
-                    raise ValidationError(f"{self.name} must be a valid datetime")
-            elif not isinstance(value, datetime):
-                raise ValidationError(f"{self.name} must be a datetime")
         return value
 
 
@@ -493,17 +563,22 @@ class TimeField(Field):
             default=self.default
         )
     
+    def to_python(self, value: Any) -> Any:
+        """Convert value to time."""
+        if value is None:
+            return None
+        if isinstance(value, dt_time):
+            return value
+        if isinstance(value, str):
+            try:
+                return dt_datetime.strptime(value, '%H:%M:%S').time()
+            except ValueError:
+                raise ValidationError(f"{self.name} must be a valid time (HH:MM:SS)")
+        raise ValidationError(f"{self.name} must be a time")
+
     def validate(self, value: Any) -> Any:
         """Validate TimeField value."""
         value = super().validate(value)
-        if value is not None:
-            if isinstance(value, str):
-                try:
-                    value = datetime.strptime(value, '%H:%M:%S').time()
-                except ValueError:
-                    raise ValidationError(f"{self.name} must be a valid time (HH:MM:SS)")
-            elif not isinstance(value, time):
-                raise ValidationError(f"{self.name} must be a time")
         return value
 
 
@@ -524,14 +599,19 @@ class DurationField(Field):
             default=self.default
         )
     
+    def to_python(self, value: Any) -> Any:
+        """Convert value to timedelta."""
+        if value is None:
+            return None
+        if isinstance(value, timedelta):
+            return value
+        if isinstance(value, (int, float)):
+            return timedelta(seconds=value)
+        raise ValidationError(f"{self.name} must be a timedelta")
+
     def validate(self, value: Any) -> Any:
         """Validate DurationField value."""
         value = super().validate(value)
-        if value is not None:
-            if isinstance(value, (int, float)):
-                value = timedelta(seconds=value)
-            elif not isinstance(value, timedelta):
-                raise ValidationError(f"{self.name} must be a timedelta")
         return value
 
 
@@ -551,11 +631,17 @@ class BinaryField(Field):
             default=self.default
         )
     
+    def to_python(self, value: Any) -> Any:
+        """Convert value to bytes."""
+        if value is None:
+            return None
+        if isinstance(value, bytes):
+            return value
+        raise ValidationError(f"{self.name} must be bytes")
+
     def validate(self, value: Any) -> Any:
         """Validate BinaryField value."""
         value = super().validate(value)
-        if value is not None and not isinstance(value, bytes):
-            raise ValidationError(f"{self.name} must be bytes")
         return value
 
 
@@ -723,17 +809,22 @@ class UUIDField(Field):
             default=self.default
         )
     
+    def to_python(self, value: Any) -> Any:
+        """Convert value to UUID."""
+        if value is None:
+            return None
+        if isinstance(value, uuid.UUID):
+            return value
+        if isinstance(value, str):
+            try:
+                return uuid.UUID(value)
+            except ValueError:
+                raise ValidationError(f"{self.name} must be a valid UUID")
+        raise ValidationError(f"{self.name} must be a UUID")
+
     def validate(self, value: Any) -> Any:
         """Validate UUIDField value."""
         value = super().validate(value)
-        if value is not None:
-            if isinstance(value, str):
-                try:
-                    value = uuid.UUID(value)
-                except ValueError:
-                    raise ValidationError(f"{self.name} must be a valid UUID")
-            elif not isinstance(value, uuid.UUID):
-                raise ValidationError(f"{self.name} must be a UUID")
         return value
 
 
@@ -828,17 +919,22 @@ class CommaSeparatedIntegerField(Field):
             default=self.default
         )
     
+    def to_python(self, value: Any) -> Any:
+        """Convert value to list of integers."""
+        if value is None:
+            return None
+        if isinstance(value, list):
+            return value
+        if isinstance(value, str):
+            try:
+                return [int(x.strip()) for x in value.split(',')]
+            except ValueError:
+                raise ValidationError(f"{self.name} must be comma-separated integers")
+        raise ValidationError(f"{self.name} must be a list of integers")
+
     def validate(self, value: Any) -> Any:
         """Validate CommaSeparatedIntegerField value."""
         value = super().validate(value)
-        if value is not None:
-            if isinstance(value, str):
-                try:
-                    [int(x.strip()) for x in value.split(',')]
-                except ValueError:
-                    raise ValidationError(f"{self.name} must be comma-separated integers")
-            elif not isinstance(value, list):
-                raise ValidationError(f"{self.name} must be a list of integers")
         return value
 
 
@@ -861,8 +957,22 @@ class ForeignKey(Field):
     
     def get_column(self) -> Column:
         """Get SQLAlchemy Integer column for foreign key."""
+        # Determine target table name
+        target = self.to
+        if isinstance(target, type):
+            # It's a class
+            target_table = target.__tablename__ if hasattr(target, '__tablename__') else target.__name__.lower()
+        else:
+            # It's a string. Assume simple case for now or "app.Model"
+            # If "Model", table is "model".
+            target_table = target.split('.')[-1].lower()
+
+        fk_string = f"{target_table}.id"
+        print(f"DEBUG: ForeignKey target: {fk_string}")
+
         return Column(
             Integer,
+            SAForeignKey(fk_string, ondelete=self.on_delete.upper() if self.on_delete != 'CASCADE' else 'CASCADE'),
             nullable=self.null,
             unique=self.unique,
             index=self.db_index,
@@ -872,10 +982,27 @@ class ForeignKey(Field):
     
     def get_relationship(self, model_class):
         """Get SQLAlchemy relationship."""
+        # Map Django-style on_delete to SQLAlchemy cascade options
+        cascade_map = {
+            'cascade': 'all, delete-orphan',
+            'protect': 'save-update, merge',
+            'set_null': 'save-update, merge',
+            'set_default': 'save-update, merge',
+            'do_nothing': 'save-update, merge',
+        }
+        backref_cascade = cascade_map.get(self.on_delete.lower(), 'save-update, merge')
+
+        # Explicitly specify foreign keys to help SQLAlchemy find the join condition
+        # self.name is set by ModelMeta
+        foreign_keys = f"[{model_class.__name__}.{self.name}_id]"
+
+        # Use related_name if provided, otherwise use default
+        backref_name = getattr(self, 'related_name', f"{model_class.__name__.lower()}_set")
+
         return relationship(
             self.to,
-            backref=f"{model_class.__name__.lower()}_set",
-            cascade=self.on_delete.lower()
+            backref=backref(backref_name, cascade=backref_cascade, collection_class=RelatedManager),
+            foreign_keys=foreign_keys
         )
 
 
@@ -890,11 +1017,20 @@ class OneToOneField(ForeignKey):
     
     def get_relationship(self, model_class):
         """Get SQLAlchemy relationship for one-to-one."""
+        # Map Django-style on_delete to SQLAlchemy cascade options
+        cascade_map = {
+            'cascade': 'all, delete-orphan',
+            'protect': 'save-update, merge',
+            'set_null': 'save-update, merge',
+            'set_default': 'save-update, merge',
+            'do_nothing': 'save-update, merge',
+        }
+        backref_cascade = cascade_map.get(self.on_delete.lower(), 'save-update, merge')
+
         return relationship(
             self.to,
-            backref=f"{model_class.__name__.lower()}",
-            uselist=False,
-            cascade=self.on_delete.lower()
+            backref=backref(f"{model_class.__name__.lower()}", uselist=False, cascade=backref_cascade),
+            uselist=False
         )
 
 
@@ -921,17 +1057,23 @@ class ManyToManyField(Field):
     
     def get_relationship(self, model_class):
         """Get SQLAlchemy relationship for many-to-many."""
+        # Use related_name if provided, otherwise use default
+        backref_name = getattr(self, 'related_name', f"{model_class.__name__.lower()}_set")
+
         if self.through:
             return relationship(
                 self.to,
                 secondary=self.through,
-                backref=f"{model_class.__name__.lower()}_set"
+                backref=backref(backref_name, collection_class=RelatedManager),
+                collection_class=RelatedManager
             )
         else:
             # Create association table automatically
-            table_name = f"{model_class.__name__.lower()}_{self.to.lower()}"
+            to_name = self.to.lower() if isinstance(self.to, str) else self.to.__name__.lower()
+            table_name = f"{model_class.__name__.lower()}_{to_name}"
             return relationship(
                 self.to,
                 secondary=table_name,
-                backref=f"{model_class.__name__.lower()}_set"
+                backref=backref(backref_name, collection_class=RelatedManager),
+                collection_class=RelatedManager
             )

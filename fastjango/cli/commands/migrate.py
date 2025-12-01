@@ -27,14 +27,18 @@ def load_migrations(app_label: str) -> List[Migration]:
     Returns:
         List of migration objects
     """
-    migrations_dir = Path.cwd() / app_label / "migrations"
+    # Use current directory as base for loading migrations
+    # MigrationLoader will handle app_label/migrations structure
+    migrations_dir = Path.cwd()
     
-    if not migrations_dir.exists():
+    app_migrations_dir = migrations_dir / app_label / "migrations"
+    if not app_migrations_dir.exists():
         logger.info(f"No migrations directory found for app '{app_label}'")
         return []
     
     loader = MigrationLoader(str(migrations_dir))
     migration_files = loader.get_migration_files(app_label)
+    logger.info(f"Found migration files for {app_label}: {migration_files}")
     
     migrations = []
     for migration_name in migration_files:
@@ -175,7 +179,7 @@ def show_migration_status(app_label: str = None):
     
     if app_label:
         # Show status for specific app
-        app_migrations_dir = Path.cwd() / app_label / "migrations"
+        app_migrations_dir = Path.cwd()
         if app_migrations_dir.exists():
             show_migrations(engine, str(app_migrations_dir.parent))
         else:
@@ -198,7 +202,7 @@ def rollback_migration(app_label: str, migration_name: str) -> bool:
     """
     try:
         # Load the specific migration
-        migrations_dir = Path.cwd() / app_label / "migrations"
+        migrations_dir = Path.cwd()
         loader = MigrationLoader(str(migrations_dir))
         
         migration = loader.load_migration(app_label, migration_name)

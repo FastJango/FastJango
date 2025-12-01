@@ -30,6 +30,14 @@ class FastAPIPagination(BasePagination):
         super().__init__(page_size, max_page_size, page_query_param, page_size_query_param)
         self.include_total = include_total
         self.include_links = include_links
+
+    def get_page_size(self, request: Request) -> int:
+        """Get page size from request."""
+        try:
+            page_size = int(request.query_params.get(self.page_size_query_param, self.page_size))
+            return min(page_size, self.max_page_size)
+        except (ValueError, TypeError):
+            return self.page_size
     
     def get_pagination_params(self, request: Request) -> PaginationParams:
         """Get pagination parameters from request."""

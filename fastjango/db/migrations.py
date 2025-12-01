@@ -503,7 +503,13 @@ class MigrationLoader:
         Returns:
             Migration object
         """
-        migration_file = self.migrations_dir / app_label / f"{name}.py"
+        app_dir = self.migrations_dir / app_label
+
+        # Check if migrations are in a subdirectory
+        if (app_dir / "migrations").exists():
+            app_dir = app_dir / "migrations"
+
+        migration_file = app_dir / f"{name}.py"
         
         if not migration_file.exists():
             raise FileNotFoundError(f"Migration file not found: {migration_file}")
@@ -533,6 +539,10 @@ class MigrationLoader:
         app_dir = self.migrations_dir / app_label
         if not app_dir.exists():
             return []
+
+        # Check if migrations are in a subdirectory
+        if (app_dir / "migrations").exists():
+            app_dir = app_dir / "migrations"
         
         migration_files = []
         for file in app_dir.glob("*.py"):

@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from fastapi import FastAPI, Request, Depends, Query, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.encoders import jsonable_encoder
 from fastapi.testclient import TestClient
 
 # Import FastJango components
@@ -142,12 +143,12 @@ async def get_products_page(
     
     # Get paginated response
     response = paginator.get_paginated_response(
-        products_to_dict(paginated_products), 
+        paginated_products,
         len(SAMPLE_PRODUCTS), 
         request
     )
     
-    return JSONResponse(content=response.dict())
+    return JSONResponse(content=jsonable_encoder(response.dict()))
 
 
 @app.get("/products/limit-offset")
@@ -163,12 +164,12 @@ async def get_products_limit_offset(
     
     # Get paginated response
     response = paginator.get_paginated_response(
-        products_to_dict(paginated_products), 
+        paginated_products,
         len(SAMPLE_PRODUCTS), 
         request
     )
     
-    return JSONResponse(content=response.dict())
+    return JSONResponse(content=jsonable_encoder(response.dict()))
 
 
 @app.get("/products/cursor")
@@ -184,12 +185,12 @@ async def get_products_cursor(
     
     # Get paginated response
     response = paginator.get_paginated_response(
-        products_to_dict(paginated_products), 
+        paginated_products,
         len(SAMPLE_PRODUCTS), 
         request
     )
     
-    return JSONResponse(content=response.dict())
+    return JSONResponse(content=jsonable_encoder(response.dict()))
 
 
 # FastAPI pagination endpoints
@@ -206,12 +207,12 @@ async def get_products_fastapi_page(
     
     # Get paginated response
     response = paginator.get_paginated_response(
-        products_to_dict(paginated_products), 
+        paginated_products,
         len(SAMPLE_PRODUCTS), 
         request
     )
     
-    return JSONResponse(content=response.dict())
+    return JSONResponse(content=jsonable_encoder(response.dict()))
 
 
 @app.get("/products/fastapi-limit-offset")
@@ -227,12 +228,12 @@ async def get_products_fastapi_limit_offset(
     
     # Get paginated response
     response = paginator.get_paginated_response(
-        products_to_dict(paginated_products), 
+        paginated_products,
         len(SAMPLE_PRODUCTS), 
         request
     )
     
-    return JSONResponse(content=response.dict())
+    return JSONResponse(content=jsonable_encoder(response.dict()))
 
 
 # Django-like pagination endpoints
@@ -249,12 +250,12 @@ async def get_products_django_page(
     
     # Get paginated response
     response = paginator.get_paginated_response(
-        products_to_dict(paginated_products), 
+        paginated_products,
         len(SAMPLE_PRODUCTS), 
         request
     )
     
-    return JSONResponse(content=response.dict())
+    return JSONResponse(content=jsonable_encoder(response.dict()))
 
 
 @app.get("/products/django-limit-offset")
@@ -270,12 +271,12 @@ async def get_products_django_limit_offset(
     
     # Get paginated response
     response = paginator.get_paginated_response(
-        products_to_dict(paginated_products), 
+        paginated_products,
         len(SAMPLE_PRODUCTS), 
         request
     )
     
-    return JSONResponse(content=response.dict())
+    return JSONResponse(content=jsonable_encoder(response.dict()))
 
 
 # Advanced pagination with filtering and ordering
@@ -328,12 +329,12 @@ async def get_products_advanced(
     
     # Get paginated response
     response = paginator.get_paginated_response(
-        products_to_dict(paginated_products), 
+        paginated_products,
         len(filtered_products), 
         request
     )
     
-    return JSONResponse(content=response.dict())
+    return JSONResponse(content=jsonable_encoder(response.dict()))
 
 
 # Settings endpoint

@@ -80,6 +80,25 @@ class BasePagination:
         """Get pagination links."""
         raise NotImplementedError
 
+    def _build_url(self, base_url: str, params: Dict[str, Any]) -> str:
+        """Build URL with query parameters."""
+        parsed = urlparse(base_url)
+        query_params = parse_qs(parsed.query)
+
+        # Update with new parameters
+        for key, value in params.items():
+            query_params[key] = [str(value)]
+
+        new_query = urlencode(query_params, doseq=True)
+        return urlunparse((
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            new_query,
+            parsed.fragment
+        ))
+
 
 class PageNumberPagination(BasePagination):
     """Page number pagination similar to Django DRF."""
@@ -279,6 +298,14 @@ class CursorPagination(BasePagination):
     def get_cursor(self, request: Request) -> Optional[str]:
         """Get cursor from request."""
         return request.query_params.get(self.cursor_query_param)
+
+    def get_page_size(self, request: Request) -> int:
+        """Get page size from request."""
+        try:
+            page_size = int(request.query_params.get(self.page_size_query_param, self.page_size))
+            return min(page_size, self.max_page_size)
+        except (ValueError, TypeError):
+            return self.page_size
     
     def paginate_queryset(self, queryset: List[Any], request: Request) -> List[Any]:
         """Paginate queryset using cursor."""
