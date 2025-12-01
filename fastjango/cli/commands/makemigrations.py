@@ -18,6 +18,8 @@ from fastjango.db.migrations import (
 )
 from fastjango.db.connection import get_engine
 from fastjango.db.models import Model
+from fastjango.db.sqlalchemy_compat import SQLAlchemyModel
+from sqlalchemy import inspect as sa_inspect, Column
 
 logger = Logger("fastjango.cli.commands.makemigrations")
 
@@ -37,7 +39,7 @@ def detect_model_changes(app_label: str, models_dir: Path) -> List[MigrationOper
     
     # Get existing tables from database
     engine = get_engine()
-    inspector = inspect(engine)
+    inspector = sa_inspect(engine)
     existing_tables = inspector.get_table_names()
     
     # Import and analyze models
@@ -58,8 +60,8 @@ def detect_model_changes(app_label: str, models_dir: Path) -> List[MigrationOper
             # Find all Model classes
             for name, obj in inspect.getmembers(models_module):
                 if (inspect.isclass(obj) and 
-                    issubclass(obj, Model) and 
-                    obj != Model):
+                    (issubclass(obj, Model) or issubclass(obj, SQLAlchemyModel)) and
+                    obj != Model and obj != SQLAlchemyModel):
                     model_classes.append(obj)
                     
         except Exception as e:
@@ -67,19 +69,39 @@ def detect_model_changes(app_label: str, models_dir: Path) -> List[MigrationOper
     
     # Analyze each model
     for model_class in model_classes:
-        table_name = getattr(model_class.Meta, 'table_name', model_class.__name__.lower())
+        # Determine table name
+        table_name = None
+        if hasattr(model_class, 'Meta'):
+            table_name = getattr(model_class.Meta, 'table_name', None)
+            if not table_name:
+                table_name = getattr(model_class.Meta, 'db_table', None)
         
+        if not table_name:
+            table_name = getattr(model_class, '__tablename__', model_class.__name__.lower())
+
+        # Prepare fields iterator
+        if hasattr(model_class, '_fields'):
+            fields_iter = model_class._fields.items()
+            get_field_attrs = lambda f: (f.null, f.primary_key, f.unique, f.default)
+            field_names = set(model_class._fields.keys())
+        else:
+            # SQLAlchemy model
+            fields_iter = [(col.name, col) for col in model_class.__table__.columns]
+            get_field_attrs = lambda f: (f.nullable, f.primary_key, f.unique, f.default.arg if f.default else None)
+            field_names = set(c.name for c in model_class.__table__.columns)
+
         if table_name not in existing_tables:
             # New table - create it
             columns = []
-            for field_name, field in model_class._fields.items():
+            for field_name, field in fields_iter:
+                nullable, primary_key, unique, default = get_field_attrs(field)
                 column_def = {
                     'name': field_name,
                     'type': _get_sql_type(field),
-                    'nullable': field.null,
-                    'primary_key': field.primary_key,
-                    'unique': field.unique,
-                    'default': field.default
+                    'nullable': nullable,
+                    'primary_key': primary_key,
+                    'unique': unique,
+                    'default': default
                 }
                 columns.append(column_def)
             
@@ -90,16 +112,18 @@ def detect_model_changes(app_label: str, models_dir: Path) -> List[MigrationOper
             # Existing table - check for column changes
             existing_columns = {col['name']: col for col in inspector.get_columns(table_name)}
             
-            for field_name, field in model_class._fields.items():
+            for field_name, field in fields_iter:
+                nullable, primary_key, unique, default = get_field_attrs(field)
+
                 if field_name not in existing_columns:
                     # New column
                     operations.append(AddColumn(
                         table_name=table_name,
                         column_name=field_name,
                         column_type=_get_sql_type(field),
-                        nullable=field.null,
-                        unique=field.unique,
-                        default=field.default
+                        nullable=nullable,
+                        unique=unique,
+                        default=default
                     ))
                     logger.info(f"Detected new column: {table_name}.{field_name}")
                 
@@ -108,7 +132,8 @@ def detect_model_changes(app_label: str, models_dir: Path) -> List[MigrationOper
                     existing_col = existing_columns[field_name]
                     new_type = _get_sql_type(field)
                     
-                    if existing_col['type'] != new_type:
+                    # Simplified type check - string comparison might be flaky
+                    if str(existing_col['type']) != str(new_type) and new_type != 'TEXT': # TEXT fallback in _get_sql_type
                         operations.append(AlterColumn(
                             table_name=table_name,
                             column_name=field_name,
@@ -117,9 +142,8 @@ def detect_model_changes(app_label: str, models_dir: Path) -> List[MigrationOper
                         logger.info(f"Detected column type change: {table_name}.{field_name}")
             
             # Check for dropped columns (simplified - would need more sophisticated tracking)
-            model_fields = set(model_class._fields.keys())
             for col_name in existing_columns:
-                if col_name not in model_fields and col_name != 'id':
+                if col_name not in field_names and col_name != 'id':
                     operations.append(DropColumn(
                         table_name=table_name,
                         column_name=col_name
@@ -139,40 +163,49 @@ def _get_sql_type(field) -> str:
     Returns:
         SQL type string
     """
+    if isinstance(field, Column):
+        return str(field.type)
+
     field_type = type(field).__name__
     
-    type_mapping = {
-        'CharField': f'VARCHAR({field.max_length})',
-        'TextField': 'TEXT',
-        'IntegerField': 'INTEGER',
-        'BigIntegerField': 'BIGINT',
-        'SmallIntegerField': 'SMALLINT',
-        'PositiveIntegerField': 'INTEGER',
-        'PositiveSmallIntegerField': 'SMALLINT',
-        'FloatField': 'FLOAT',
-        'DecimalField': f'DECIMAL({field.max_digits},{field.decimal_places})',
-        'BooleanField': 'BOOLEAN',
-        'NullBooleanField': 'BOOLEAN',
-        'DateField': 'DATE',
-        'DateTimeField': 'DATETIME',
-        'TimeField': 'TIME',
-        'DurationField': 'INTERVAL',
-        'BinaryField': 'BLOB',
-        'FileField': 'VARCHAR(255)',
-        'ImageField': 'VARCHAR(255)',
-        'FilePathField': 'VARCHAR(255)',
-        'EmailField': f'VARCHAR({field.max_length})',
-        'URLField': f'VARCHAR({field.max_length})',
-        'SlugField': f'VARCHAR({field.max_length})',
-        'UUIDField': 'UUID',
-        'IPAddressField': 'VARCHAR(15)',
-        'GenericIPAddressField': 'VARCHAR(45)',
-        'CommaSeparatedIntegerField': f'VARCHAR({field.max_length})',
-        'ForeignKey': 'INTEGER',
-        'OneToOneField': 'INTEGER',
-    }
+    if field_type == 'CharField':
+        return f'VARCHAR({getattr(field, "max_length", 255)})'
+    elif field_type == 'TextField':
+        return 'TEXT'
+    elif field_type in ('IntegerField', 'PositiveIntegerField', 'ForeignKey', 'OneToOneField'):
+        return 'INTEGER'
+    elif field_type == 'BigIntegerField':
+        return 'BIGINT'
+    elif field_type in ('SmallIntegerField', 'PositiveSmallIntegerField'):
+        return 'SMALLINT'
+    elif field_type == 'FloatField':
+        return 'FLOAT'
+    elif field_type == 'DecimalField':
+        return f'DECIMAL({field.max_digits},{field.decimal_places})'
+    elif field_type in ('BooleanField', 'NullBooleanField'):
+        return 'BOOLEAN'
+    elif field_type == 'DateField':
+        return 'DATE'
+    elif field_type == 'DateTimeField':
+        return 'DATETIME'
+    elif field_type == 'TimeField':
+        return 'TIME'
+    elif field_type == 'DurationField':
+        return 'INTERVAL'
+    elif field_type == 'BinaryField':
+        return 'BLOB'
+    elif field_type in ('FileField', 'ImageField', 'FilePathField'):
+        return 'VARCHAR(255)'
+    elif field_type in ('EmailField', 'URLField', 'SlugField', 'CommaSeparatedIntegerField'):
+        return f'VARCHAR({field.max_length})'
+    elif field_type == 'UUIDField':
+        return 'UUID'
+    elif field_type == 'IPAddressField':
+        return 'VARCHAR(15)'
+    elif field_type == 'GenericIPAddressField':
+        return 'VARCHAR(45)'
     
-    return type_mapping.get(field_type, 'TEXT')
+    return 'TEXT'
 
 
 def create_migration_file(app_label: str, migration_name: str, operations: List[MigrationOperation]) -> Path:
@@ -198,12 +231,13 @@ def create_migration_file(app_label: str, migration_name: str, operations: List[
     
     # Generate migration file content
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{timestamp}_{migration_name}.py"
+    full_name = f"{timestamp}_{migration_name}"
+    filename = f"{full_name}.py"
     migration_file = migrations_dir / filename
     
     # Create migration content
     content = f'''"""
-Migration {migration_name} for {app_label}.
+Migration {full_name} for {app_label}.
 """
 
 from fastjango.db.migrations import Migration, {', '.join(op.__class__.__name__ for op in operations)}
@@ -215,7 +249,7 @@ operations = [
 
 # Create migration
 migration = Migration(
-    name="{migration_name}",
+    name="{full_name}",
     app_label="{app_label}",
     operations=operations
 )
@@ -226,6 +260,17 @@ migration = Migration(
     
     return migration_file
 
+
+def _serialize_default(value):
+    """Serialize default value for migration file."""
+    if value is None:
+        return 'None'
+    if callable(value):
+        # For now, we don't support serializing functions in migrations
+        # Ideally we would import them, e.g. datetime.now
+        # Fallback to None to avoid syntax errors
+        return 'None'
+    return repr(value)
 
 def _operation_to_code(operation) -> str:
     """
@@ -241,18 +286,19 @@ def _operation_to_code(operation) -> str:
         columns_str = ',\n        '.join([
             f"{{'name': '{col['name']}', 'type': '{col['type']}', "
             f"'nullable': {col['nullable']}, 'primary_key': {col['primary_key']}, "
-            f"'unique': {col['unique']}, 'default': {col['default']}}}"
+            f"'unique': {col['unique']}, 'default': {_serialize_default(col['default'])}}}"
             for col in operation.columns
         ])
         return f"table_name='{operation.table_name}', columns=[\n        {columns_str}\n    ]"
     
     elif isinstance(operation, AddColumn):
+        default_val = _serialize_default(operation.kwargs.get('default', None))
         return (f"table_name='{operation.table_name}', "
                 f"column_name='{operation.column_name}', "
                 f"column_type='{operation.column_type}', "
                 f"nullable={operation.kwargs.get('nullable', True)}, "
                 f"unique={operation.kwargs.get('unique', False)}, "
-                f"default={operation.kwargs.get('default', None)}")
+                f"default={default_val}")
     
     elif isinstance(operation, DropColumn):
         return f"table_name='{operation.table_name}', column_name='{operation.column_name}'"

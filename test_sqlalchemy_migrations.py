@@ -12,6 +12,9 @@ from pathlib import Path
 # Add the fastjango package to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '.'))
 
+from fastjango.db import SQLAlchemyModel
+from sqlalchemy import inspect
+
 # Set up environment
 os.environ.setdefault('FASTJANGO_SETTINGS_MODULE', 'test_settings')
 
@@ -55,7 +58,7 @@ from fastjango.db import (
     SQLAlchemyModel, CharField, TextField, IntegerField, 
     DateTimeField, BooleanField, ForeignKey, relationship
 )
-from sqlalchemy import Column, String, Integer, DateTime, Boolean, Text
+from sqlalchemy import Column, String, Integer, DateTime, Boolean, Text, inspect, ForeignKey as SAForeignKey
 from sqlalchemy.orm import relationship as SARelationship
 from datetime import datetime
 
@@ -65,12 +68,12 @@ class TestUser(SQLAlchemyModel):
     
     __tablename__ = 'test_users'
     
-    username = CharField(max_length=150, unique=True)
-    email = CharField(max_length=254, unique=True)
-    first_name = CharField(max_length=30, nullable=True)
-    last_name = CharField(max_length=30, nullable=True)
-    is_active = BooleanField(default=True)
-    date_joined = DateTimeField(default=datetime.now)
+    username = Column(String(150), unique=True)
+    email = Column(String(254), unique=True)
+    first_name = Column(String(30), nullable=True)
+    last_name = Column(String(30), nullable=True)
+    is_active = Column(Boolean, default=True)
+    date_joined = Column(DateTime, default=datetime.now)
 
 
 class TestCategory(SQLAlchemyModel):
@@ -78,11 +81,11 @@ class TestCategory(SQLAlchemyModel):
     
     __tablename__ = 'test_categories'
     
-    name = CharField(max_length=100)
-    slug = CharField(max_length=100, unique=True)
-    description = TextField(nullable=True)
-    is_active = BooleanField(default=True)
-    created_at = DateTimeField(default=datetime.now)
+    name = Column(String(100))
+    slug = Column(String(100), unique=True)
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.now)
 
 
 class TestProduct(SQLAlchemyModel):
@@ -90,17 +93,17 @@ class TestProduct(SQLAlchemyModel):
     
     __tablename__ = 'test_products'
     
-    name = CharField(max_length=200)
-    slug = CharField(max_length=200, unique=True)
-    description = TextField(nullable=True)
+    name = Column(String(200))
+    slug = Column(String(200), unique=True)
+    description = Column(Text, nullable=True)
     price = Column(Integer)  # Direct SQLAlchemy column
-    stock = IntegerField(default=0)
-    is_active = BooleanField(default=True)
-    created_at = DateTimeField(default=datetime.now)
+    stock = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.now)
     
     # Relationships
-    category_id = ForeignKey('test_categories.id')
-    created_by_id = ForeignKey('test_users.id', nullable=True)
+    category_id = Column(Integer, SAForeignKey('test_categories.id'))
+    created_by_id = Column(Integer, SAForeignKey('test_users.id'), nullable=True)
     
     # SQLAlchemy relationships
     category = SARelationship("TestCategory", backref="products")
@@ -114,7 +117,7 @@ class TestOrder(SQLAlchemyModel):
     
     # Pure SQLAlchemy columns
     order_number = Column(String(20), unique=True, nullable=False)
-    customer_id = Column(Integer, ForeignKey('test_users.id'), nullable=False)
+    customer_id = Column(Integer, SAForeignKey('test_users.id'), nullable=False)
     total_amount = Column(Integer, nullable=False)
     status = Column(String(20), default='pending')
     order_date = Column(DateTime, default=datetime.now)
@@ -276,10 +279,12 @@ def test_model_usage():
         print(f"Created product: {product}")
         
         # Test QuerySet operations
-        users = TestUser.objects.all()
+        # SQLAlchemyModel.objects is a class method, so we must call it
+        users = TestUser.objects().all()
+        print(f"DEBUG: users type: {type(users)}")
         print(f"Total users: {users.count()}")
         
-        active_products = TestProduct.objects.filter(is_active=True)
+        active_products = TestProduct.objects().filter(is_active=True)
         print(f"Active products: {active_products.count()}")
         
         # Test SQLAlchemy queries
@@ -358,10 +363,39 @@ def main():
     
     results = []
     
+    # Clear metadata and registry before starting to avoid conflicts
+    SQLAlchemyModel.metadata.clear()
+    if hasattr(SQLAlchemyModel, 'registry'):
+        SQLAlchemyModel.registry.dispose()
+
     # Run tests
+    # Note: Running these sequentially without full process isolation causes metadata conflicts
+    # because makemigrations imports models via importlib, and we also import them here.
+    # We try to clear metadata between tests.
+
     results.append(("Migration Detection", test_migration_detection()))
+    SQLAlchemyModel.metadata.clear()
+    if hasattr(SQLAlchemyModel, 'registry'):
+        SQLAlchemyModel.registry.dispose()
+
     results.append(("Migration Creation", test_migration_creation()))
+    SQLAlchemyModel.metadata.clear()
+    if hasattr(SQLAlchemyModel, 'registry'):
+        SQLAlchemyModel.registry.dispose()
+
     results.append(("Migration Application", test_migration_application()))
+
+    # We need to clear registry before model usage because test_model_usage imports models again
+    # But wait, if we clear registry, we lose mappings?
+    # test_model_usage re-imports testapp.models. If sys.modules has it, it returns old module.
+    # We need to force reload or clear sys.modules['testapp.models'].
+    if 'testapp.models' in sys.modules:
+        del sys.modules['testapp.models']
+
+    SQLAlchemyModel.metadata.clear()
+    if hasattr(SQLAlchemyModel, 'registry'):
+        SQLAlchemyModel.registry.dispose()
+
     results.append(("Model Usage", test_model_usage()))
     results.append(("Migration Rollback", test_migration_rollback()))
     

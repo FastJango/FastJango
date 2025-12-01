@@ -4,6 +4,8 @@ Database connection management for FastJango ORM.
 
 import os
 import importlib
+import threading
+import asyncio
 from typing import Optional, Dict, Any
 from contextlib import contextmanager
 
@@ -129,6 +131,22 @@ def get_session_factory() -> sessionmaker:
     return _session_factory
 
 
+def get_session_scope():
+    """
+    Get the session scope (async task or thread ID).
+
+    Returns:
+        Scope identifier
+    """
+    try:
+        task = asyncio.current_task()
+        if task:
+            return task
+    except RuntimeError:
+        pass
+    return threading.get_ident()
+
+
 def get_session() -> Session:
     """
     Get a new database session.
@@ -139,7 +157,7 @@ def get_session() -> Session:
     global _scoped_session
     if _scoped_session is None:
         session_factory = get_session_factory()
-        _scoped_session = scoped_session(session_factory)
+        _scoped_session = scoped_session(session_factory, scopefunc=get_session_scope)
     return _scoped_session()
 
 

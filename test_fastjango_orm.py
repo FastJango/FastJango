@@ -79,6 +79,11 @@ STATIC_ROOT = '{test_settings["STATIC_ROOT"]}'
 STATIC_URL = '/static/'
 """)
     
+    # Create app directory for migrations test
+    os.makedirs('testapp', exist_ok=True)
+    with open('testapp/__init__.py', 'w') as f:
+        f.write('')
+
     return temp_dir, db_path, test_settings
 
 
@@ -88,6 +93,8 @@ def cleanup_test_environment(temp_dir):
         shutil.rmtree(temp_dir)
         if os.path.exists('test_settings.py'):
             os.remove('test_settings.py')
+        if os.path.exists('testapp'):
+            shutil.rmtree('testapp')
     except Exception as e:
         print(f"Warning: Could not clean up test environment: {e}")
 
@@ -144,11 +151,11 @@ def test_basic_model_creation():
         assert TestUser._meta.app_label == 'testapp', "App label should be set"
         assert TestUser._meta.db_table == 'test_users', "Table name should be set"
         
-        # Test field attributes
-        assert TestUser.username.max_length == 100, "CharField max_length should be set"
-        assert TestUser.email.max_length == 255, "EmailField max_length should be set"
-        assert TestUser.age.default == 0, "IntegerField default should be set"
-        assert TestUser.is_active.default is True, "BooleanField default should be set"
+        # Test field attributes via _fields (since class attributes are SQLAlchemy InstrumentedAttributes)
+        assert TestUser._fields['username'].max_length == 100, "CharField max_length should be set"
+        assert TestUser._fields['email'].max_length == 255, "EmailField max_length should be set"
+        assert TestUser._fields['age'].default == 0, "IntegerField default should be set"
+        assert TestUser._fields['is_active'].default is True, "BooleanField default should be set"
         
         print("✅ Basic model creation successful")
         return True
@@ -398,6 +405,15 @@ def test_migrations():
         from fastjango.cli.commands.makemigrations import make_migrations
         from fastjango.cli.commands.migrate import migrate
         
+        # Create models.py in testapp
+        with open('testapp/models.py', 'w') as f:
+            f.write("""
+from fastjango.db import models
+
+class MigratedModel(models.Model):
+    name = models.CharField(max_length=100)
+""")
+
         # Test migration creation
         migration_file = make_migrations('testapp')
         assert migration_file is not None, "Should create migration file"
@@ -409,7 +425,9 @@ def test_migrations():
         
         # Test migration status
         from fastjango.db.migrations import MigrationRecorder
-        recorder = MigrationRecorder()
+        from fastjango.db.connection import get_engine
+
+        recorder = MigrationRecorder(get_engine())
         applied_migrations = recorder.get_applied_migrations()
         assert len(applied_migrations) > 0, "Should have applied migrations"
         

@@ -233,18 +233,23 @@ class IntegerField(Field):
             default=self.default
         )
     
+    def to_python(self, value: Any) -> Any:
+        """Convert value to integer."""
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            raise ValidationError(f"{self.name} must be an integer")
+
     def validate(self, value: Any) -> Any:
         """Validate IntegerField value."""
         value = super().validate(value)
         if value is not None:
-            try:
-                value = int(value)
-                if hasattr(self, 'min_value') and self.min_value is not None and value < self.min_value:
-                    raise ValidationError(f"{self.name} must be at least {self.min_value}")
-                if hasattr(self, 'max_value') and self.max_value is not None and value > self.max_value:
-                    raise ValidationError(f"{self.name} must be at most {self.max_value}")
-            except (ValueError, TypeError):
-                raise ValidationError(f"{self.name} must be an integer")
+            if hasattr(self, 'min_value') and self.min_value is not None and value < self.min_value:
+                raise ValidationError(f"{self.name} must be at least {self.min_value}")
+            if hasattr(self, 'max_value') and self.max_value is not None and value > self.max_value:
+                raise ValidationError(f"{self.name} must be at most {self.max_value}")
         return value
 
 
@@ -346,14 +351,18 @@ class FloatField(Field):
             default=self.default
         )
     
+    def to_python(self, value: Any) -> Any:
+        """Convert value to float."""
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            raise ValidationError(f"{self.name} must be a number")
+
     def validate(self, value: Any) -> Any:
         """Validate FloatField value."""
         value = super().validate(value)
-        if value is not None:
-            try:
-                value = float(value)
-            except (ValueError, TypeError):
-                raise ValidationError(f"{self.name} must be a number")
         return value
 
 
@@ -385,21 +394,28 @@ class DecimalField(Field):
             default=self.default
         )
     
+    def to_python(self, value: Any) -> Any:
+        """Convert value to Decimal."""
+        if value is None:
+            return None
+        if isinstance(value, Decimal):
+            return value
+        try:
+            return Decimal(str(value))
+        except (ValueError, TypeError):
+            raise ValidationError(f"{self.name} must be a valid decimal number")
+
     def validate(self, value: Any) -> Any:
         """Validate DecimalField value."""
         value = super().validate(value)
         if value is not None:
-            try:
-                value = Decimal(str(value))
-                if len(str(value).replace('.', '')) > self.max_digits:
-                    raise ValidationError(f"{self.name} cannot have more than {self.max_digits} digits")
+            if len(str(value).replace('.', '')) > self.max_digits:
+                raise ValidationError(f"{self.name} cannot have more than {self.max_digits} digits")
 
-                if hasattr(self, 'min_value') and self.min_value is not None and value < self.min_value:
-                    raise ValidationError(f"{self.name} must be at least {self.min_value}")
-                if hasattr(self, 'max_value') and self.max_value is not None and value > self.max_value:
-                    raise ValidationError(f"{self.name} must be at most {self.max_value}")
-            except (ValueError, TypeError):
-                raise ValidationError(f"{self.name} must be a valid decimal number")
+            if hasattr(self, 'min_value') and self.min_value is not None and value < self.min_value:
+                raise ValidationError(f"{self.name} must be at least {self.min_value}")
+            if hasattr(self, 'max_value') and self.max_value is not None and value > self.max_value:
+                raise ValidationError(f"{self.name} must be at most {self.max_value}")
         return value
 
 
@@ -419,20 +435,23 @@ class BooleanField(Field):
             default=self.default
         )
     
+    def to_python(self, value: Any) -> Any:
+        """Convert value to boolean."""
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            value = value.lower()
+            if value in ('true', '1', 'yes', 'on'):
+                return True
+            elif value in ('false', '0', 'no', 'off'):
+                return False
+        raise ValidationError(f"{self.name} must be True or False")
+
     def validate(self, value: Any) -> Any:
         """Validate BooleanField value."""
         value = super().validate(value)
-        if value is not None:
-            if isinstance(value, str):
-                value = value.lower()
-                if value in ('true', '1', 'yes', 'on'):
-                    value = True
-                elif value in ('false', '0', 'no', 'off'):
-                    value = False
-                else:
-                    raise ValidationError(f"{self.name} must be True or False")
-            elif not isinstance(value, bool):
-                raise ValidationError(f"{self.name} must be True or False")
         return value
 
 
@@ -462,17 +481,22 @@ class DateField(Field):
             default=self.default
         )
     
+    def to_python(self, value: Any) -> Any:
+        """Convert value to date."""
+        if value is None:
+            return None
+        if isinstance(value, dt_date):
+            return value
+        if isinstance(value, str):
+            try:
+                return dt_datetime.strptime(value, '%Y-%m-%d').date()
+            except ValueError:
+                raise ValidationError(f"{self.name} must be a valid date (YYYY-MM-DD)")
+        raise ValidationError(f"{self.name} must be a date")
+
     def validate(self, value: Any) -> Any:
         """Validate DateField value."""
         value = super().validate(value)
-        if value is not None:
-            if isinstance(value, str):
-                try:
-                    value = dt_datetime.strptime(value, '%Y-%m-%d').date()
-                except ValueError:
-                    raise ValidationError(f"{self.name} must be a valid date (YYYY-MM-DD)")
-            elif not isinstance(value, dt_date):
-                raise ValidationError(f"{self.name} must be a date")
         return value
 
 
@@ -504,20 +528,22 @@ class DateTimeField(Field):
             default=self.default
         )
     
+    def to_python(self, value: Any) -> Any:
+        """Convert value to datetime."""
+        if value is None:
+            return None
+        if isinstance(value, dt_datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return dt_datetime.fromisoformat(value.replace('Z', '+00:00'))
+            except ValueError:
+                raise ValidationError(f"{self.name} must be a valid datetime")
+        raise ValidationError(f"{self.name} must be a datetime")
+
     def validate(self, value: Any) -> Any:
         """Validate DateTimeField value."""
         value = super().validate(value)
-        if value is not None:
-            if isinstance(value, str):
-                try:
-                    value = dt_datetime.fromisoformat(value.replace('Z', '+00:00'))
-                except ValueError:
-                    raise ValidationError(f"{self.name} must be a valid datetime")
-            elif not isinstance(value, dt_datetime):
-                # Debug print
-                print(f"DEBUG: DateTimeField validation failed. Value type: {type(value)}, Expected: {dt_datetime}")
-                # Check if it's a date being passed as datetime?
-                raise ValidationError(f"{self.name} must be a datetime")
         return value
 
 
@@ -537,17 +563,22 @@ class TimeField(Field):
             default=self.default
         )
     
+    def to_python(self, value: Any) -> Any:
+        """Convert value to time."""
+        if value is None:
+            return None
+        if isinstance(value, dt_time):
+            return value
+        if isinstance(value, str):
+            try:
+                return dt_datetime.strptime(value, '%H:%M:%S').time()
+            except ValueError:
+                raise ValidationError(f"{self.name} must be a valid time (HH:MM:SS)")
+        raise ValidationError(f"{self.name} must be a time")
+
     def validate(self, value: Any) -> Any:
         """Validate TimeField value."""
         value = super().validate(value)
-        if value is not None:
-            if isinstance(value, str):
-                try:
-                    value = dt_datetime.strptime(value, '%H:%M:%S').time()
-                except ValueError:
-                    raise ValidationError(f"{self.name} must be a valid time (HH:MM:SS)")
-            elif not isinstance(value, dt_time):
-                raise ValidationError(f"{self.name} must be a time")
         return value
 
 
@@ -568,14 +599,19 @@ class DurationField(Field):
             default=self.default
         )
     
+    def to_python(self, value: Any) -> Any:
+        """Convert value to timedelta."""
+        if value is None:
+            return None
+        if isinstance(value, timedelta):
+            return value
+        if isinstance(value, (int, float)):
+            return timedelta(seconds=value)
+        raise ValidationError(f"{self.name} must be a timedelta")
+
     def validate(self, value: Any) -> Any:
         """Validate DurationField value."""
         value = super().validate(value)
-        if value is not None:
-            if isinstance(value, (int, float)):
-                value = timedelta(seconds=value)
-            elif not isinstance(value, timedelta):
-                raise ValidationError(f"{self.name} must be a timedelta")
         return value
 
 
@@ -595,11 +631,17 @@ class BinaryField(Field):
             default=self.default
         )
     
+    def to_python(self, value: Any) -> Any:
+        """Convert value to bytes."""
+        if value is None:
+            return None
+        if isinstance(value, bytes):
+            return value
+        raise ValidationError(f"{self.name} must be bytes")
+
     def validate(self, value: Any) -> Any:
         """Validate BinaryField value."""
         value = super().validate(value)
-        if value is not None and not isinstance(value, bytes):
-            raise ValidationError(f"{self.name} must be bytes")
         return value
 
 
@@ -767,17 +809,22 @@ class UUIDField(Field):
             default=self.default
         )
     
+    def to_python(self, value: Any) -> Any:
+        """Convert value to UUID."""
+        if value is None:
+            return None
+        if isinstance(value, uuid.UUID):
+            return value
+        if isinstance(value, str):
+            try:
+                return uuid.UUID(value)
+            except ValueError:
+                raise ValidationError(f"{self.name} must be a valid UUID")
+        raise ValidationError(f"{self.name} must be a UUID")
+
     def validate(self, value: Any) -> Any:
         """Validate UUIDField value."""
         value = super().validate(value)
-        if value is not None:
-            if isinstance(value, str):
-                try:
-                    value = uuid.UUID(value)
-                except ValueError:
-                    raise ValidationError(f"{self.name} must be a valid UUID")
-            elif not isinstance(value, uuid.UUID):
-                raise ValidationError(f"{self.name} must be a UUID")
         return value
 
 
@@ -872,17 +919,22 @@ class CommaSeparatedIntegerField(Field):
             default=self.default
         )
     
+    def to_python(self, value: Any) -> Any:
+        """Convert value to list of integers."""
+        if value is None:
+            return None
+        if isinstance(value, list):
+            return value
+        if isinstance(value, str):
+            try:
+                return [int(x.strip()) for x in value.split(',')]
+            except ValueError:
+                raise ValidationError(f"{self.name} must be comma-separated integers")
+        raise ValidationError(f"{self.name} must be a list of integers")
+
     def validate(self, value: Any) -> Any:
         """Validate CommaSeparatedIntegerField value."""
         value = super().validate(value)
-        if value is not None:
-            if isinstance(value, str):
-                try:
-                    [int(x.strip()) for x in value.split(',')]
-                except ValueError:
-                    raise ValidationError(f"{self.name} must be comma-separated integers")
-            elif not isinstance(value, list):
-                raise ValidationError(f"{self.name} must be a list of integers")
         return value
 
 

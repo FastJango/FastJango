@@ -278,7 +278,7 @@ class ModelMeta(DeclarativeMeta):
         # Set _fields and _relationships
         setattr(cls, '_fields', fields)
         setattr(cls, '_relationships', relationships)
-        
+
         # Set _meta
         meta_class = attrs.get('Meta', getattr(cls, 'Meta', None))
         setattr(cls, '_meta', Options(meta_class))
@@ -337,6 +337,19 @@ class ModelMeta(DeclarativeMeta):
         # We need to call super().__init__
         super().__init__(name, bases, attrs)
 
+        # Copy field metadata to InstrumentedAttributes to allow access like Model.field.max_length
+        for field_name, field in fields.items():
+            if hasattr(cls, field_name):
+                attr = getattr(cls, field_name)
+                # Copy common field attributes
+                for metadata_attr in ['max_length', 'null', 'blank', 'default', 'choices', 'verbose_name', 'help_text']:
+                    if hasattr(field, metadata_attr):
+                        try:
+                            # We can set attributes on the InstrumentedAttribute
+                            setattr(attr, metadata_attr, getattr(field, metadata_attr))
+                        except (AttributeError, TypeError):
+                            pass
+
 
 class Model(Base, metaclass=ModelMeta):
     """
@@ -361,9 +374,19 @@ class Model(Base, metaclass=ModelMeta):
         """
         # Set field values
         for field_name, value in kwargs.items():
-            # We skip validation here to match Django behavior (validate on full_clean/save)
-            # However, we might want to perform type conversion if fields supported it via to_python
-            # For now, just set the value.
+            # Perform type conversion if field exists
+            if field_name in self._fields:
+                field = self._fields[field_name]
+                try:
+                    value = field.to_python(value)
+                except ValidationError:
+                    # If conversion fails, keep raw value? Or raise?
+                    # Django raises on conversion failure during clean, but here we are in init.
+                    # If we raise here, we break loose initialization.
+                    # But if we don't convert, validation will fail later anyway.
+                    # Let's allow raw value if conversion fails, assuming validation will catch it.
+                    pass
+
             setattr(self, field_name, value)
         
         # Set auto_now_add fields

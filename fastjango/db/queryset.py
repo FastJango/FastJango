@@ -244,16 +244,14 @@ class QuerySet:
         """
         return self.count() > 0
     
-    def all(self) -> List[Any]:
+    def all(self) -> 'QuerySet':
         """
         Get all objects.
         
         Returns:
-            List of model instances
+            QuerySet with all objects
         """
-        query = self._build_query()
-        result = self.session.execute(query)
-        return [row[0] for row in result.fetchall()]
+        return self._clone()
     
     def create(self, **kwargs) -> Any:
         """
@@ -534,7 +532,10 @@ class QuerySet:
     
     def __iter__(self):
         """Iterate over QuerySet results."""
-        return iter(self.all())
+        query = self._build_query()
+        result = self.session.execute(query)
+        for row in result.fetchall():
+            yield row[0]
     
     def __len__(self):
         """Get the number of objects."""
@@ -545,13 +546,19 @@ class QuerySet:
         if isinstance(key, slice):
             start = key.start or 0
             stop = key.stop
-            step = key.step or 1
+            step = key.step
             
-            qs = self.offset(start)
+            qs = self._clone()
+            if start:
+                qs = qs.offset(start)
             if stop is not None:
                 qs = qs.limit(stop - start)
             
-            return qs.all()[::step]
+            if step:
+                # Evaluate if step is used
+                return list(qs)[::step]
+
+            return qs
         else:
             return self.offset(key).limit(1).first()
     
